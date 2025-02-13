@@ -21,7 +21,7 @@ SceneSDK provides crucial for multiplayer games possibility to:
 
 ### Lobby
 
-Lobby shows connected players and their status which can be changed by pressing ```Ready``` button.
+Lobby shows connected players and their statuses which can be changed by pressing ```Ready``` button.
 
 Host has possibility to kick players.
 
@@ -34,7 +34,7 @@ Lobby proceeds to ```Game Scene``` when all players are marked as ```Ready```.
 Right after Main Menu players are presented with a choice, to select ```Start Bonus``` and ```Permanent Bonus```.
 
 * ```Start Bonus``` will affect ```Player Building``` immediately at the start of the game, by increasing the selected attribute(eg. AttackStrength, Speed, GatherStrength)
-* ```Permanent Bonus``` is goint to affect ```Player Building``` during the whole game session. Each ```Building``` level-up, ```Permanent Bonus``` is applied to the sellected attribute. 
+* ```Permanent Bonus``` is goint to affect ```Player Building``` during the whole game session. Each time ```Building``` achieves level-up, ```Permanent Bonus``` is applied to the sellected attribute. 
 
 Game provides player with control over attributes development and ordering ```Units``` where to go. Providing different strategic opportunities:
 
