@@ -10,6 +10,7 @@ public class Resource : NetworkBehaviour
     private int occupiedZoneIndex;
     private int occupiedIndex;
     [SerializeField] private Material resourceMaterial;
+    public EventHandler OnResourceDespawn;
 
     public override void OnNetworkSpawn()
     {
@@ -64,6 +65,10 @@ public class Resource : NetworkBehaviour
         }
         Debug.Log("Despawning");
         ResourceSpawner.Instance.ClearOccupiedZone(occupiedIndex, occupiedZoneIndex);
+
+        // If resource is Interaction target for any Unit, notify about its despawn, so they would change target before they completely approached it.
+        OnResourceDespawn?.Invoke(this, EventArgs.Empty);
+        
         NetworkObject.Despawn(false);
         gameObject.SetActive(false);
     }

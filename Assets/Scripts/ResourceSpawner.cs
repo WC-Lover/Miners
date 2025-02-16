@@ -35,7 +35,7 @@ public class ResourceSpawner : MonoBehaviour
     private Dictionary<int, List<Transform>> indexToZoneListDictionary;
     private Dictionary<int, List<int>> indexToAvailableZoneListDictionary;
 
-    private float resourceSpawnTime;
+    [SerializeField] private float resourceSpawnTime;
     private float resourceSpawnTimeMax;
     private bool allOccupied = false;
 

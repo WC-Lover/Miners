@@ -123,7 +123,7 @@ Rigidbody:
   m_UseGravity: 0
   m_IsKinematic: 1
   m_Interpolate: 0
-  m_Constraints: 116
+  m_Constraints: 84
   m_CollisionDetection: 3
 --- !u!114 &4646343657597795690
 MonoBehaviour:
@@ -171,7 +171,7 @@ MonoBehaviour:
   resourceLayerMask:
     serializedVersion: 2
     m_Bits: 128
-  obstacleDetectionRange: 0.5
+  obstacleDetectionDistance: 0.5
   unitPlayerMaterial: {fileID: 2100000, guid: eeb9760792238e149b00c71dc87639ec, type: 2}
   defaultUnitMaterial: {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
 --- !u!1 &5906279192881902590

@@ -1,4 +1,5 @@
 using System;
+using Mono.Cecil;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -30,15 +31,14 @@ public class Unit : NetworkBehaviour
     private Vector3 interactionDirection;
     private float interactionDirectionUpdateTimer = 0;
     private float interactionDirectionUpdateTimerMax = 0.2f;
-    private Resource closestInteractionResource;
-    private Building closestInteractionBuilding;
+    private Resource interactionResource;
+    private Building interactionBuilding;
     private Unit interactionUnit;
     private Vector3 directionToMoveBackToBase;
     private Vector3 directionToMoveAfterSpawn;
     // AVOID COLLISION
-    private Vector3 currentDirection;
     private Vector3[] directionsArray = new Vector3[3];
-    public float obstacleDetectionRange = 0.5f;
+    public float obstacleDetectionDistance = 0.5f;
     // MATERIALS
     [SerializeField] private Material unitPlayerMaterial;
     [SerializeField] private Material defaultUnitMaterial;
@@ -84,8 +84,8 @@ public class Unit : NetworkBehaviour
                     carryingWeightReturned = 0;
                     // when unit is refilled, trigger search for next interaction
                     interactionDirection = Vector3.up;
-                    currentDirection = Vector3.up;
-                    closestInteractionBuilding = null;
+                    interactionDirection = Vector3.up;
+                    interactionBuilding = null;
                     directionToMoveAfterSpawn = Vector3.zero;
                 }
             }
@@ -116,7 +116,7 @@ public class Unit : NetworkBehaviour
 
         SetPlayerHealthServerRpc(BuildingLevel + 3);
 
-        speed = BuildingLevel * 0.1f + 1.2f;
+        speed = BuildingLevel * 0.1f + 0.4f;
         // gatherPower(for resources) = claimPower(for buildings)
         gatherPower = BuildingLevel * 0.5f + 1;
         gatherCooldown = BuildingLevel > 0 ? BuildingLevel * 0.95f * 2 : 2;
@@ -130,6 +130,10 @@ public class Unit : NetworkBehaviour
 
         stamina = staminaMax;
 
+        Vector3 pos = interactionDirection - transform.position;
+        Quaternion rotation = Quaternion.LookRotation(pos);
+        rb.rotation = rotation;
+
         var meshRenderer = GetComponentInChildren<MeshRenderer>();
         var meshRendererMaterials = new Material[1];
         meshRendererMaterials[0] = unitPlayerMaterial;
@@ -142,122 +146,124 @@ public class Unit : NetworkBehaviour
 
         if (interactionDirection != Vector3.up)
         {
-            ReCalculatePath();
-
-            if (currentDirection != interactionDirection)
-            {
-                HandleObstacleAvoidance();
-            }
-            else
-            {
-                Vector3 direction = (currentDirection - transform.position).normalized;
-                rb.MovePosition(transform.position + direction * speed * Time.fixedDeltaTime);
-            }
-            //if (interactionDirectionUpdateTimer <= 0)
-            //{
-            //    interactionDirectionUpdateTimer = interactionDirectionUpdateTimerMax;
-            //}
-            //else
-            //{
-            //    interactionDirectionUpdateTimer -= Time.fixedDeltaTime;
-            //}
-            //if (Vector3.Distance(transform.position, interactionDirection) > interactionDistance)
-            //{
-            //    ApproachInteraction();
-            //}
-            //else
-            //{
-            //    Interact();
-            //}
+            Rotate();
+            Move();
         }
         else
         {
-            //SearchForInteraction();
+            // Approach enough to interact
+            if (stamina > 0 || carryingWeight < carryCapacity)
+            {
+                if (interactionUnit != null)
+                {
+                    // Attack enemy
+                    Debug.Log("Attack");
+                    return;
+                }
+                else if (interactionBuilding != null)
+                {
+                    // Claim Neutral building
+                    Debug.Log("Claim");
+                    return;
+                }
+                else if (interactionResource != null)
+                {
+                    // Gather resource
+                    Debug.Log("Gather");
+                    return;
+                }
+            }
+            else if (stamina < staminaMax || carryingWeight > 0)
+            {
+                if (interactionBuilding != null)
+                {
+                    // Restore stamina, unload resources
+                    Debug.Log("Restore/Unload");
+                    return;
+                }
+            }
+
+            SearchForInteraction();
         }
-
-        ////Debug.Log(unitState);
-        //switch (unitState)
-        //{
-        //    case UnitState.Searching:
-        //        SearchForClosestInteraction();
-        //        break;
-        //    case UnitState.Approach:
-        //        ApproachClosestInteraction();
-        //        break;
-        //    case UnitState.Interact:
-        //        Interact();
-        //        break;
-        //}
-        //// Test if is not crucial for performance
-        //UpdateUnitState();
     }
 
-    private void ReCalculatePath()
+    private void Move()
     {
-        //var unitsAround = stamina > 0 ? Physics.OverlapSphereNonAlloc(transform.position, searchRadius, unitsColliders, unitLayerMask) : 0;
-        //if (unitsAround > 0) CheckNearbyUnitsForEnemies(unitsAround);
+        rb.MovePosition(transform.position + transform.forward * speed * Time.fixedDeltaTime);
 
-        CheckForObstacles();
+        if (Vector3.Distance(transform.position, interactionDirection) < 0.3f)
+        {
+            interactionDirection = Vector3.up;
+        }
     }
 
-    private void CheckForObstacles()
+    private void Rotate()
     {
         RaycastHit hit;
-        if (Physics.Raycast(transform.position, transform.forward, out hit, obstacleDetectionRange))
+        Vector3 raycastOffset = Vector3.zero;
+        float offset = 0.25f; // Capsule representing unit is 0.25 width
+
+        Vector3 left = transform.position + new Vector3(0, 0.1f, 0) - transform.right * offset / 2;
+        Vector3 leftHalf = transform.position + new Vector3(0, 0.1f, 0) - (transform.right * offset) / 4;
+        Vector3 right = transform.position + new Vector3(0, 0.1f, 0) + transform.right * offset / 2;
+        Vector3 rightHalf = transform.position + new Vector3(0, 0.1f, 0) + (transform.right * offset) / 4;
+
+        Debug.DrawRay(left + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.red);
+        Debug.DrawRay(leftHalf + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.green);
+        Debug.DrawRay(right + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.red);
+        Debug.DrawRay(rightHalf + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.green);
+
+        if (Physics.Raycast(left, transform.forward, out hit, obstacleDetectionDistance)
+            || Physics.Raycast(leftHalf, transform.forward, out hit, obstacleDetectionDistance))
         {
-            currentDirection = CalculateAvoidanceDirection(hit.normal);
+            raycastOffset += Vector3.right;
+        }
+        else if (Physics.Raycast(right, transform.forward, out hit, obstacleDetectionDistance)
+            || Physics.Raycast(rightHalf, transform.forward, out hit, obstacleDetectionDistance))
+        {
+            raycastOffset -= Vector3.right;
+        }
+
+        if (raycastOffset != Vector3.zero)
+        {
+            // Still works not the way expected, either rotation is too slow, or rotation isn't applied at all
+            Vector3 pos = raycastOffset * 5f * Time.deltaTime - transform.position;
+            Quaternion rotation = Quaternion.LookRotation(pos);
+            rb.rotation = Quaternion.Slerp(transform.rotation, rotation, 2f * Time.deltaTime);
+        }
+        else
+        {
+            Vector3 pos = interactionDirection - transform.position;
+            Quaternion rotation = Quaternion.LookRotation(pos);
+            rb.rotation = Quaternion.Slerp(transform.rotation, rotation, 2f * Time.deltaTime);
         }
     }
 
-    private void OnDrawGizmosSelected()
+    private void SearchForInteraction()
     {
-        if (!IsServer) return;
+        // FIRST SEARCH FOR OTHER UNITS, IF THERE ARE ANY ENEMIES AROUND, ATTACK
+        // This is the only case where need to check stamina, player can be close to base and at the same time there may be an enemy Unit who followed fellow unit to Base!
+        var unitsAround = stamina > 0 ? Physics.OverlapSphereNonAlloc(transform.position, searchRadius, unitsColliders, unitLayerMask) : 0;
+        if (unitsAround > 0) CheckNearbyUnitsForInteraction(unitsAround);
 
-        for (int i = 0; i < directionsArray.Length; i++)
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawLine(transform.position, directionsArray[i]);
-        }
-        //Gizmos.color = Color.red;
-        //Gizmos.DrawWireSphere(transform.position, obstacleDetectionRange);
+        if (interactionUnit != null) return; 
+
+        // SECOND SEARCH FOR BUILDINGS, IF THERE IS UNCLAIMED BUILDING - CLAIM IT. IF BASE - UPDATE IT/RESTORE STAMINA
+        var buildingAround = Physics.OverlapSphereNonAlloc(transform.position, searchRadius, buildingsColliders, buildingLayerMask);
+        if (buildingAround > 0) CheckNearbyBuildingsForInteraction(buildingAround);
+
+        if (interactionBuilding != null) return; 
+
+        // LASTLY TRY TO FIND ANY RESOURCES NEARBY
+        var resourcesAround = stamina > 0 ? Physics.OverlapSphereNonAlloc(transform.position, searchRadius, resourcesColliders, resourceLayerMask) : 0 ;
+        if (resourcesAround > 0) CheckNearbyResourcesForInteraction(resourcesAround);
+
+        if (interactionResource!= null) return;
+        
+        searchRadius += Time.deltaTime;
     }
 
-    private Vector3 CalculateAvoidanceDirection(Vector3 hitNormal)
-    {
-        Vector3[] testDirections = {
-            Vector3.Cross(hitNormal, Vector3.up).normalized,
-            -Vector3.Cross(hitNormal, Vector3.up).normalized,
-            (hitNormal + Vector3.up).normalized
-        };
-
-        directionsArray = testDirections;
-
-        foreach (Vector3 dir in testDirections)
-        {
-            Debug.Log($"dir -> {dir}");
-            if (!Physics.Raycast(transform.position, dir, obstacleDetectionRange))
-            {
-                return transform.position + dir * obstacleDetectionRange * 2f;
-            }
-        }
-
-        // Fallback: Move directly away from obstacle
-        return transform.position - transform.forward * obstacleDetectionRange * 2f;
-    }
-
-    private void HandleObstacleAvoidance()
-    {
-        Vector3 direction = (currentDirection - transform.position).normalized;
-        rb.MovePosition(transform.position + direction * speed * Time.fixedDeltaTime);
-
-        // Return to main path when clear
-        if (Vector3.Distance(transform.position, currentDirection) < 0.5f)
-        {
-            currentDirection = interactionDirection;
-        }
-    }
-
-    private void CheckNearbyUnitsForEnemies(int unitsAround)
+    private void CheckNearbyUnitsForInteraction(int unitsAround)
     {
         for (int i = 0; i < unitsAround; i++)
         {
@@ -277,134 +283,64 @@ public class Unit : NetworkBehaviour
         }
     }
 
-    //private void UpdateUnitState()
-    //{
-    //    unitState = UnitState.Searching;
+    private void CheckNearbyBuildingsForInteraction(int buildingAround)
+    {
+        for (int i = 0; i < buildingAround; i++)
+        {
+            Collider buildingCollider = buildingsColliders[i];
+            Building building = buildingCollider.GetComponentInParent<Building>();
+            Transform buildingParentTransform = building.GetComponent<Transform>();
 
-    //    if (interactionDirection == null && directionToMoveAfterSpawn == Vector3.zero) return;
+            bool buildingIsNeutral = building.isNeutralBuilding;
+            bool buildingIsOccupied = building.occupationStatus == Building.Occupation.Occupied ? true : false;
+            bool buildingBelongsToUnitOwner = building.IsOwner;
 
-    //    searchRadius = defaultSearchRadius;
+            if (buildingIsNeutral && (!buildingBelongsToUnitOwner || !buildingIsOccupied) && stamina > 0)
+            {
+                // Found neutral building to claim
+                var distanceToBuilding = Vector3.Distance(transform.position, buildingParentTransform.position);
+                if (interactionDirection == null || distanceToBuilding < Vector3.Distance(transform.position, interactionDirection))
+                {
+                    interactionDirection = buildingParentTransform.position;
+                    interactionBuilding = building;
+                }
+            }
+            else if (buildingBelongsToUnitOwner && buildingIsOccupied && (stamina < staminaMax || carryingWeight > 0))
+            {
+                // Got back to base and ready to update building and restore stamina 
+                interactionDirection = buildingParentTransform.position;
+                interactionBuilding = building;
+            }
+        }
+    }
 
-    //    unitState = UnitState.Approach;
+    private void CheckNearbyResourcesForInteraction(int resourcesAround)
+    {
+        for (int i = 0; i < resourcesAround; i++)
+        {
+            Collider resourceCollider = resourcesColliders[i];
+            Resource resource = resourceCollider.GetComponentInParent<Resource>();
+            if (resource.weight.Value <= 0) continue;
+            Transform resourceParentTransform = resource.GetComponent<Transform>();
 
-    //    var distance = directionToMoveAfterSpawn != Vector3.zero
-    //        ? Vector3.Distance(transform.position, directionToMoveAfterSpawn)
-    //        : Vector3.Distance(transform.position, interactionDirection.position);
+            resource.OnResourceDespawn += OnInteractionTargetDespawn;
 
-    //    if (directionToMoveAfterSpawn != Vector3.zero && distance <= interactionDistance)
-    //    {
-    //        directionToMoveAfterSpawn = Vector3.zero;
-    //        unitState = UnitState.Searching;
-    //    }
+            var distanceToResource = Vector3.Distance(transform.position, resourceParentTransform.position);
+            if (interactionDirection == null || distanceToResource < Vector3.Distance(transform.position, interactionDirection))
+            {
+                interactionDirection = resourceParentTransform.position;
+                interactionResource = resource;
+            }
+        }
+    }
 
-    //    if (interactionDirection != null && distance <= interactionDistance) unitState = UnitState.Interact;
-    //}
-
-    //private void ApproachInteraction()
-    //{
-    //    if (directionToMoveAfterSpawn == Vector3.zero && interactionDirection == null) return;
-
-    //    Vector3 finalDestination = directionToMoveAfterSpawn != Vector3.zero ? directionToMoveAfterSpawn : interactionDirection.position;
-    //    Vector3 direction = (finalDestination - transform.position).normalized;
-    //    rb.MovePosition(transform.position + speed * Time.fixedDeltaTime * direction);
-
-    //    //transform.position = Vector3.MoveTowards
-    //    //(
-    //    //    transform.position,
-    //    //    directionToMoveAfterSpawn != Vector3.zero ? directionToMoveAfterSpawn : closestInteraction.position,
-    //    //    speed * Time.deltaTime
-    //    //);
-    //}
-
-    //private void SearchForInteraction()
-    //{
-    //    // FIRST SEARCH FOR OTHER UNITS, IF THERE ARE ANY ENEMIES AROUND, ATTACK
-    //    // This is the only case where need to check stamina, player can be close to base and at the same time there may be an enemy Unit who followed fellow unit to Base!
-    //    var unitsAround = stamina > 0 ? Physics.OverlapSphereNonAlloc(transform.position, searchRadius, unitsColliders, unitLayerMask) : 0;
-
-    //    if (unitsAround > 0)
-    //    {
-    //        for (int i = 0; i < unitsAround; i++)
-    //        {
-    //            Collider unitCollider = unitsColliders[i];
-    //            Unit unit = unitCollider.GetComponentInParent<Unit>();
-    //            Transform unitParentTransform = unit.GetComponent<Transform>();
-
-    //            if (unit.OwnerClientId != OwnerClientId)
-    //            {
-    //                var distanceToEnemyUnit = Vector3.Distance(transform.position, unitParentTransform.position);
-    //                if (interactionDirection == null || distanceToEnemyUnit < Vector3.Distance(transform.position, interactionDirection.position))
-    //                {
-    //                    interactionDirection = unitParentTransform;
-    //                    interactionUnit = unit;
-    //                }
-    //            }
-    //        }
-    //        // If any enemy unit is found focus it!
-    //        if (interactionDirection != null) return;
-    //    }
-
-    //    // SECOND SEARCH FOR BUILDINGS, IF THERE IS UNCLAIMED BUILDING - CLAIM IT. IF BASE - UPDATE IT/RESTORE STAMINA
-    //    var buildingAround = Physics.OverlapSphereNonAlloc(transform.position, searchRadius, buildingsColliders, buildingLayerMask);
-
-    //    if (buildingAround > 0)
-    //    {
-    //        for (int i = 0; i < buildingAround; i++)
-    //        {
-    //            Collider buildingCollider = buildingsColliders[i];
-    //            Building building = buildingCollider.GetComponentInParent<Building>();
-    //            Transform buildingParentTransform = building.GetComponent<Transform>();
-
-    //            bool buildingIsNeutral = building.isNeutralBuilding;
-    //            bool buildingIsOccupied = building.occupationStatus == Building.Occupation.Occupied ? true : false;
-    //            bool buildingBelongsToUnitOwner = building.IsOwner;
-
-    //            if (buildingIsNeutral && (!buildingBelongsToUnitOwner || !buildingIsOccupied) && stamina > 0)
-    //            {    
-    //                // Found neutral building to claim
-    //                var distanceToBuilding = Vector3.Distance(transform.position, buildingParentTransform.position);
-    //                if (interactionDirection == null || distanceToBuilding < Vector3.Distance(transform.position, interactionDirection.position))
-    //                {
-    //                    interactionDirection = buildingParentTransform;
-    //                    closestInteractionBuilding = building;
-    //                }
-    //            }
-    //            else if (buildingBelongsToUnitOwner && buildingIsOccupied && (stamina < staminaMax || carryingWeight > 0))
-    //            {
-    //                // Got back to base and ready to update building and restore stamina 
-    //                interactionDirection = buildingParentTransform;
-    //                closestInteractionBuilding = building;
-    //            }
-    //        }
-    //        // If any building is found focus it!
-    //        if (interactionDirection != null) return;
-    //    }
-
-    //    // LASTLY TRY TO FIND ANY RESOURCES NEARBY
-    //    var resourcesAround = Physics.OverlapSphereNonAlloc(transform.position, searchRadius, resourcesColliders, resourceLayerMask);
-
-    //    if (resourcesAround > 0)
-    //    {
-    //        for (int i = 0; i < resourcesAround; i++)
-    //        {
-    //            Collider resourceCollider = resourcesColliders[i];
-    //            Resource resource = resourceCollider.GetComponentInParent<Resource>();
-    //            if (resource.weight.Value <= 0) continue;
-    //            Transform resourceParentTransform = resource.GetComponent<Transform>();
-
-    //            var distanceToResource = Vector3.Distance(transform.position, resourceParentTransform.position);
-    //            if (interactionDirection == null || distanceToResource < Vector3.Distance(transform.position, interactionDirection.position))
-    //            {
-    //                interactionDirection = resourceParentTransform;
-    //                closestInteractionResource = resource;
-    //            }
-    //        }
-    //        // If any resource is found focus it!
-    //        if (interactionDirection != null) return;
-    //    }
-
-    //    searchRadius += Time.deltaTime;
-    //}
+    private void OnInteractionTargetDespawn(object sender, EventArgs e)
+    {
+        interactionDirection = Vector3.up;
+        interactionUnit = null;
+        interactionBuilding = null;
+        interactionResource = null;
+    }
 
     //private void Interact()
     //{
