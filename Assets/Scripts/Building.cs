@@ -90,17 +90,17 @@ public class Building : NetworkBehaviour
         // Only player building can spawn units | If unit claims the buildign it becomes non-neutral
         if (!IsOwner || occupationStatus == Occupation.Empty || amoutOfMinersSpawned == amoutOfMinersMax) return;
 
-        //if (unitSpawnTime > 0) unitSpawnTime -= Time.deltaTime;
-        //else if (PlayerMouseInput.Instance.lastWorldPosition != Vector3.zero)
-        //{
-        //    unitSpawnTime = unitSpawnTimeMax;
-        //    SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
-        //    amoutOfMinersSpawned++;
-        //}
-        if (Input.GetMouseButtonDown(0))
+        if (unitSpawnTime > 0) unitSpawnTime -= Time.deltaTime;
+        else if (PlayerMouseInput.Instance.lastWorldPosition != Vector3.zero)
         {
+            unitSpawnTime = unitSpawnTimeMax;
             SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
+            amoutOfMinersSpawned++;
         }
+        //if (Input.GetMouseButtonDown(0))
+        //{
+        //    SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
+        //}
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -121,13 +121,14 @@ public class Building : NetworkBehaviour
         // Spawn with ownership of the building owner
         unit.NetworkObject.SpawnWithOwnership(serverRpcParams.Receive.SenderClientId);
         unit.SetOwnerBuildingForServer(this);
+        unit.SetHealthForUnit(buildingLevel);
         unit.InitializeOwnerRpc(buildingLevel, getBackPosition, directionToMove, minerIndex);
     }
 
     public void BuildingGainXP(float xp)
     {
         if (buildingLevel >= buildingLevelMax) return;
-        buildingXP += xp + (buildingLevel * 0.75f);
+        buildingXP += xp + (buildingLevel * 0.5f);
 
         if (buildingXP >= buildingXPMax)
         {

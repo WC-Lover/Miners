@@ -1,401 +1,535 @@
 using System;
 using Mono.Cecil;
 using Unity.Netcode;
+using Unity.VisualScripting;
 using UnityEngine;
+using static UnityEngine.GraphicsBuffer;
 
 public class Unit : NetworkBehaviour
 {
-    // STATS
-    const float interactionDistance = 1f;
-    public NetworkVariable<float> health = new NetworkVariable<float>();
-    private float speed;
-    private float gatherPower;
-    private float gatherCooldown;
-    private float attackDamage; 
-    private float attackCooldown;
-    private float staminaMax;
-    [SerializeField] private float stamina;
-    private int carryCapacity;
-    [SerializeField] private float carryingWeight;
-    [SerializeField] private float carryingWeightReturned;
-    // SEARCH
-    [SerializeField] private float defaultSearchRadius = 0.25f;
-    [SerializeField] private float searchRadius;
+    [Header("Settings")]
+    [SerializeField] private float obstacleDetectionDistance = 0.5f;
     [SerializeField] private LayerMask unitLayerMask;
     [SerializeField] private LayerMask buildingLayerMask;
     [SerializeField] private LayerMask resourceLayerMask;
-    private Collider[] unitsColliders;
-    private Collider[] buildingsColliders;
-    private Collider[] resourcesColliders;
-    // APPROACH/INTERACT
-    private Vector3 interactionDirection;
-    private float interactionDirectionUpdateTimer = 0;
-    private float interactionDirectionUpdateTimerMax = 0.2f;
-    private Resource interactionResource;
-    private Building interactionBuilding;
-    private Unit interactionUnit;
-    private Vector3 directionToMoveBackToBase;
-    private Vector3 directionToMoveAfterSpawn;
-    // AVOID COLLISION
-    private Vector3[] directionsArray = new Vector3[3];
-    public float obstacleDetectionDistance = 0.5f;
-    // MATERIALS
     [SerializeField] private Material unitPlayerMaterial;
     [SerializeField] private Material defaultUnitMaterial;
-    private UnitState unitState;
-    private bool hasAlreadyBeenCreated = false;
 
-    // TEMP
+    [Header("Debug")]
+    [SerializeField] private UnitState currentState;
+    [SerializeField] private float stamina;
+    [SerializeField] private float carryingWeight;
+    [SerializeField] private float carryingWeightReturned;
+
+    private NetworkVariable<float> health = new NetworkVariable<float>();
+    private UnitStats stats;
+    private SearchSettings searchSettings;
+    private MovementSettings movementSettings;
+    [SerializeField] private InteractionTarget currentTarget;
     private Rigidbody rb;
-
     private Building serverOwnerBuilding;
-
     private int minerIndex;
-    private float deltaTime;
+    private float rangeOfInteraction;
 
-    public enum UnitState
+    private Vector3 basePosition;
+    private Material[] originalMaterials;
+    public EventHandler OnUnitDespawn;
+
+    private enum UnitState
     {
-        Searching,
-        Approach,
-        Interact
+        ApproachingSpawnPosition,
+        SearchingForInteraction,
+        ApproachingTarget,
+        Interacting,
+        ReturningToBase,
+        Restoring
     }
 
-    public void SetOwnerBuildingForServer(Building ownerBuilding)
+    private struct UnitStats
     {
-        serverOwnerBuilding = ownerBuilding;
+        public float Speed;
+        public float GatherPower;
+        public float AttackDamage;
+        public float StaminaMax;
+        public int CarryCapacity;
+        public float InteractionCooldown;
     }
 
-    private void OnCollisionStay(Collision collision)
+    private struct SearchSettings
     {
-        if (carryingWeight >= carryCapacity || stamina <= 0)
-        {
-
-            Building building = collision.collider.GetComponentInParent<Building>();
-            if (building != null && building.IsOwner
-                && building.occupationStatus == Building.Occupation.Occupied)
-            {
-                // if returned from claiming other building, gain less XP but not 0!!!
-                building.BuildingGainXP(carryingWeight * deltaTime);
-                carryingWeightReturned += carryingWeight * deltaTime;
-                if (carryingWeightReturned >= carryingWeight)
-                {
-                    stamina = staminaMax;
-                    carryingWeight = 0;
-                    carryingWeightReturned = 0;
-                    // when unit is refilled, trigger search for next interaction
-                    interactionDirection = Vector3.up;
-                    interactionDirection = Vector3.up;
-                    interactionBuilding = null;
-                    directionToMoveAfterSpawn = Vector3.zero;
-                }
-            }
-
-        }
-        if (stamina > 0)
-        {
-            Unit unit = collision.collider.GetComponentInParent<Unit>();
-            if (unit != null && !unit.IsOwner) unitState = UnitState.Searching;
-        }
+        public float DefaultRadius;
+        public float CurrentRadius;
+        public int MaxUnits;
+        public int MaxBuildings;
+        public int MaxResources;
     }
+
+    private struct MovementSettings
+    {
+        public Vector3 SpawnDirection;
+        public Vector3 BaseDirection;
+        public float RotationSpeed;
+    }
+
+    private class InteractionTarget
+    {
+        public Vector3 Position;
+        public Unit Unit;
+        public Building Building;
+        public Resource Resource;
+        public float RangeOfInteraction;
+    }
+
+    public void SetOwnerBuildingForServer(Building ownerBuilding) => serverOwnerBuilding = ownerBuilding;
+    public void SetHealthForUnit(int buildingLevel) => health.Value = buildingLevel + 3;
 
     [Rpc(SendTo.Owner)]
-    public void InitializeOwnerRpc(int BuildingLevel, Vector3 getBackPosition, Vector3 directionToMove, int minerIndex)
+    public void InitializeOwnerRpc(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, int minerIndex)
     {
-        // This one is being sent to all Units of this owner???
-        if (hasAlreadyBeenCreated) return;
-        rb = GetComponent<Rigidbody>();
-        hasAlreadyBeenCreated = true;
+        if (!IsOwner) return;
+
+        InitializeComponents();
+        InitializeStats(buildingLevel, basePosition, spawnDirection);
+        InitializeMaterials();
+        TransitionState(UnitState.ApproachingSpawnPosition);
+        currentTarget = new InteractionTarget { Position = spawnDirection, RangeOfInteraction = 0.14f }; // range is unit width / 2 + 0.015f
+
         this.minerIndex = minerIndex;
-        unitState = UnitState.Approach;
-        carryingWeight = 0;
-        carryingWeightReturned = 0;
-        unitsColliders = new Collider[100]; // in late 4 players each spawn about 50
-        buildingsColliders = new Collider[4];
-        resourcesColliders = new Collider[50]; // at max 10*10 (overall), - 3*3 (middle), - (4 * 10 - 3) (edges) 
-        searchRadius = defaultSearchRadius;
+        this.basePosition = basePosition;
+    }
 
-        SetPlayerHealthServerRpc(BuildingLevel + 3);
+    private void InitializeComponents()
+    {
+        rb = GetComponent<Rigidbody>();
+        originalMaterials = GetComponentInChildren<MeshRenderer>().materials;
+    }
 
-        speed = BuildingLevel * 0.1f + 0.4f;
-        // gatherPower(for resources) = claimPower(for buildings)
-        gatherPower = BuildingLevel * 0.5f + 1;
-        gatherCooldown = BuildingLevel > 0 ? BuildingLevel * 0.95f * 2 : 2;
-        attackDamage = BuildingLevel * 0.2f + 1;
-        attackCooldown = BuildingLevel > 0 ? BuildingLevel * 0.95f * 2 : 2;
-        carryCapacity = (BuildingLevel / 5) + 2;
-        directionToMoveBackToBase = getBackPosition;
-        directionToMoveAfterSpawn = directionToMove;
-        interactionDirection = directionToMove;
-        staminaMax = (BuildingLevel / 5) + 3;
+    private void InitializeStats(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection)
+    {
+        stats = new UnitStats
+        {
+            Speed = buildingLevel * 0.1f + 0.4f,
+            GatherPower = buildingLevel * 0.5f + 1,
+            AttackDamage = buildingLevel * 0.2f + 1,
+            StaminaMax = (buildingLevel / 5) + 3,
+            CarryCapacity = (buildingLevel / 5) + 2,
+            InteractionCooldown = buildingLevel > 0 ? buildingLevel * 0.95f * 2 : 2
+        };
 
-        stamina = staminaMax;
+        searchSettings = new SearchSettings
+        {
+            DefaultRadius = 0.25f,
+            CurrentRadius = 0.25f,
+            MaxUnits = 100, // In late stage each of 4 players can spawn about 50 units
+            MaxBuildings = 4,
+            MaxResources = 55 // At max 10*10 (overall) - 3*3 (holy resource) - [4*10 - 4] (edges)
+        };
 
-        Vector3 pos = interactionDirection - transform.position;
-        Quaternion rotation = Quaternion.LookRotation(pos);
-        rb.rotation = rotation;
+        movementSettings = new MovementSettings
+        {
+            SpawnDirection = spawnDirection,
+            BaseDirection = basePosition,
+            RotationSpeed = 3f,
+        };
 
-        var meshRenderer = GetComponentInChildren<MeshRenderer>();
-        var meshRendererMaterials = new Material[1];
-        meshRendererMaterials[0] = unitPlayerMaterial;
-        meshRenderer.materials = meshRendererMaterials;
+        rangeOfInteraction = 0.25f; // Units' width. Only used in Unit-Unit interaction. 
+        stamina = stats.StaminaMax;
+    }
+
+    private void InitializeMaterials()
+    {
+        var newMaterials = new Material[originalMaterials.Length];
+        Array.Copy(originalMaterials, newMaterials, originalMaterials.Length);
+        newMaterials[0] = unitPlayerMaterial;
+        GetComponentInChildren<MeshRenderer>().materials = newMaterials;
     }
 
     private void FixedUpdate()
     {
         if (!IsOwner) return;
 
-        if (interactionDirection != Vector3.up)
+        UpdateState();
+    }
+
+    private void UpdateState()
+    {
+        switch (currentState)
         {
-            Rotate();
-            Move();
+            case UnitState.ApproachingSpawnPosition:
+                UpdateApproachSpawnPosition();
+                break;
+            case UnitState.SearchingForInteraction:
+                UpdateSearch();
+                break;
+            case UnitState.ApproachingTarget:
+                UpdateApproach();
+                break;
+            case UnitState.Interacting:
+                UpdateInteraction();
+                break;
+            case UnitState.ReturningToBase:
+                UpdateReturnToBase();
+                break;
+            case UnitState.Restoring:
+                UpdateRestore();
+                break;
+        }
+    }
+
+    #region State Methods
+    private void UpdateApproachSpawnPosition()
+    {
+        if (MoveTowards(movementSettings.SpawnDirection))
+        {
+            TransitionState(UnitState.SearchingForInteraction);
+        }
+    }
+
+    private void UpdateSearch()
+    {
+        currentTarget = FindNearestInteraction();
+
+        if (currentTarget != null)
+        {
+            rb.rotation = Quaternion.LookRotation(currentTarget.Position - transform.position);
+            TransitionState(UnitState.ApproachingTarget);
         }
         else
         {
-            // Approach enough to interact
-            if (stamina > 0 || carryingWeight < carryCapacity)
-            {
-                if (interactionUnit != null)
-                {
-                    // Attack enemy
-                    Debug.Log("Attack");
-                    return;
-                }
-                else if (interactionBuilding != null)
-                {
-                    // Claim Neutral building
-                    Debug.Log("Claim");
-                    return;
-                }
-                else if (interactionResource != null)
-                {
-                    // Gather resource
-                    Debug.Log("Gather");
-                    return;
-                }
-            }
-            else if (stamina < staminaMax || carryingWeight > 0)
-            {
-                if (interactionBuilding != null)
-                {
-                    // Restore stamina, unload resources
-                    Debug.Log("Restore/Unload");
-                    return;
-                }
-            }
-
-            SearchForInteraction();
+            searchSettings.CurrentRadius += Time.fixedDeltaTime;
         }
     }
 
-    private void Move()
+    private void UpdateApproach()
     {
-        rb.MovePosition(transform.position + transform.forward * speed * Time.fixedDeltaTime);
-
-        if (Vector3.Distance(transform.position, interactionDirection) < 0.3f)
+        if (currentTarget == null || MoveTowards(currentTarget.Position))
         {
-            interactionDirection = Vector3.up;
+            TransitionState(UnitState.Interacting);
         }
     }
 
-    private void Rotate()
+    private void UpdateInteraction()
     {
-        RaycastHit hit;
-        Vector3 raycastOffset = Vector3.zero;
-        float offset = 0.25f; // Capsule representing unit is 0.25 width
-
-        Vector3 left = transform.position + new Vector3(0, 0.1f, 0) - transform.right * offset / 2;
-        Vector3 leftHalf = transform.position + new Vector3(0, 0.1f, 0) - (transform.right * offset) / 4;
-        Vector3 right = transform.position + new Vector3(0, 0.1f, 0) + transform.right * offset / 2;
-        Vector3 rightHalf = transform.position + new Vector3(0, 0.1f, 0) + (transform.right * offset) / 4;
-
-        Debug.DrawRay(left + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.red);
-        Debug.DrawRay(leftHalf + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.green);
-        Debug.DrawRay(right + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.red);
-        Debug.DrawRay(rightHalf + new Vector3(0, 0.1f, 0), transform.forward * obstacleDetectionDistance, Color.green);
-
-        if (Physics.Raycast(left, transform.forward, out hit, obstacleDetectionDistance)
-            || Physics.Raycast(leftHalf, transform.forward, out hit, obstacleDetectionDistance))
+        if (currentTarget == null || !CanInteract())
         {
-            raycastOffset += Vector3.right;
-        }
-        else if (Physics.Raycast(right, transform.forward, out hit, obstacleDetectionDistance)
-            || Physics.Raycast(rightHalf, transform.forward, out hit, obstacleDetectionDistance))
-        {
-            raycastOffset -= Vector3.right;
+            TransitionState(UnitState.SearchingForInteraction);
+            return;
         }
 
-        if (raycastOffset != Vector3.zero)
+        PerformInteraction();
+
+        if (ShouldReturnToBase())
         {
-            // Still works not the way expected, either rotation is too slow, or rotation isn't applied at all
-            Vector3 pos = raycastOffset * 5f * Time.deltaTime - transform.position;
-            Quaternion rotation = Quaternion.LookRotation(pos);
-            rb.rotation = Quaternion.Slerp(transform.rotation, rotation, 2f * Time.deltaTime);
-        }
-        else
-        {
-            Vector3 pos = interactionDirection - transform.position;
-            Quaternion rotation = Quaternion.LookRotation(pos);
-            rb.rotation = Quaternion.Slerp(transform.rotation, rotation, 2f * Time.deltaTime);
+            OnInteractionTargetDespawn(null, EventArgs.Empty); // If object is no longer of interest, unsubscribe from delegate
+            TransitionState(UnitState.ReturningToBase);
         }
     }
 
-    private void SearchForInteraction()
+    private void UpdateReturnToBase()
     {
-        // FIRST SEARCH FOR OTHER UNITS, IF THERE ARE ANY ENEMIES AROUND, ATTACK
-        // This is the only case where need to check stamina, player can be close to base and at the same time there may be an enemy Unit who followed fellow unit to Base!
-        var unitsAround = stamina > 0 ? Physics.OverlapSphereNonAlloc(transform.position, searchRadius, unitsColliders, unitLayerMask) : 0;
-        if (unitsAround > 0) CheckNearbyUnitsForInteraction(unitsAround);
-
-        if (interactionUnit != null) return; 
-
-        // SECOND SEARCH FOR BUILDINGS, IF THERE IS UNCLAIMED BUILDING - CLAIM IT. IF BASE - UPDATE IT/RESTORE STAMINA
-        var buildingAround = Physics.OverlapSphereNonAlloc(transform.position, searchRadius, buildingsColliders, buildingLayerMask);
-        if (buildingAround > 0) CheckNearbyBuildingsForInteraction(buildingAround);
-
-        if (interactionBuilding != null) return; 
-
-        // LASTLY TRY TO FIND ANY RESOURCES NEARBY
-        var resourcesAround = stamina > 0 ? Physics.OverlapSphereNonAlloc(transform.position, searchRadius, resourcesColliders, resourceLayerMask) : 0 ;
-        if (resourcesAround > 0) CheckNearbyResourcesForInteraction(resourcesAround);
-
-        if (interactionResource!= null) return;
-        
-        searchRadius += Time.deltaTime;
+        MoveTowards(currentTarget.Position); // BasePosition
     }
 
-    private void CheckNearbyUnitsForInteraction(int unitsAround)
+    private void UpdateRestore()
     {
-        for (int i = 0; i < unitsAround; i++)
+        if (currentTarget.Building != null && currentTarget.Building.IsOwner)
         {
-            Unit unit = unitsColliders[i].GetComponentInParent<Unit>();
-            Transform unitParentTransform = unit.GetComponent<Transform>();
-
-            if (unit.OwnerClientId != OwnerClientId)
-            {
-                // Unit is considered as enemy if doesn't belong to same owner
-                var distanceToEnemyUnit = Vector3.Distance(transform.position, unitParentTransform.position);
-                if (interactionDirection == Vector3.up || distanceToEnemyUnit < Vector3.Distance(transform.position, interactionDirection))
-                {
-                    interactionDirection = unitParentTransform.position;
-                    interactionUnit = unit;
-                }
-            }
+            currentTarget.Building.BuildingGainXP(carryingWeight * Time.fixedDeltaTime);
+            carryingWeight = Mathf.Max(carryingWeight - Time.fixedDeltaTime, 0);
+            stamina = Mathf.Min(stamina + Time.fixedDeltaTime, stats.StaminaMax);
+        }
+        if (stamina >= stats.StaminaMax && carryingWeight <= 0)
+        {
+            currentTarget = null;
+            TransitionState(UnitState.SearchingForInteraction);
         }
     }
+    #endregion
 
-    private void CheckNearbyBuildingsForInteraction(int buildingAround)
+    #region Helper Methods
+
+    private bool MoveTowards(Vector3 targetPosition)
     {
-        for (int i = 0; i < buildingAround; i++)
+        if (currentTarget == null) return false;
+
+        Vector3 desiredDirection = (targetPosition - transform.position).normalized;
+        Vector3 actualDirection = desiredDirection;
+
+        if (ObstacleInFront(out Vector3 avoidanceDir))
         {
-            Collider buildingCollider = buildingsColliders[i];
-            Building building = buildingCollider.GetComponentInParent<Building>();
-            Transform buildingParentTransform = building.GetComponent<Transform>();
-
-            bool buildingIsNeutral = building.isNeutralBuilding;
-            bool buildingIsOccupied = building.occupationStatus == Building.Occupation.Occupied ? true : false;
-            bool buildingBelongsToUnitOwner = building.IsOwner;
-
-            if (buildingIsNeutral && (!buildingBelongsToUnitOwner || !buildingIsOccupied) && stamina > 0)
-            {
-                // Found neutral building to claim
-                var distanceToBuilding = Vector3.Distance(transform.position, buildingParentTransform.position);
-                if (interactionDirection == null || distanceToBuilding < Vector3.Distance(transform.position, interactionDirection))
-                {
-                    interactionDirection = buildingParentTransform.position;
-                    interactionBuilding = building;
-                }
-            }
-            else if (buildingBelongsToUnitOwner && buildingIsOccupied && (stamina < staminaMax || carryingWeight > 0))
-            {
-                // Got back to base and ready to update building and restore stamina 
-                interactionDirection = buildingParentTransform.position;
-                interactionBuilding = building;
-            }
+            // Prioritize avoidance when close to obstacles
+            float avoidanceStrength = Mathf.Clamp01(1 - Vector3.Dot(desiredDirection, avoidanceDir));
+            actualDirection = Vector3.Lerp(desiredDirection, avoidanceDir, avoidanceStrength);
         }
-    }
 
-    private void CheckNearbyResourcesForInteraction(int resourcesAround)
-    {
-        for (int i = 0; i < resourcesAround; i++)
-        {
-            Collider resourceCollider = resourcesColliders[i];
-            Resource resource = resourceCollider.GetComponentInParent<Resource>();
-            if (resource.weight.Value <= 0) continue;
-            Transform resourceParentTransform = resource.GetComponent<Transform>();
-
-            resource.OnResourceDespawn += OnInteractionTargetDespawn;
-
-            var distanceToResource = Vector3.Distance(transform.position, resourceParentTransform.position);
-            if (interactionDirection == null || distanceToResource < Vector3.Distance(transform.position, interactionDirection))
-            {
-                interactionDirection = resourceParentTransform.position;
-                interactionResource = resource;
-            }
-        }
+        RotateTowards(actualDirection);
+        rb.MovePosition(transform.position + stats.Speed * Time.fixedDeltaTime * actualDirection);
+        if (currentTarget.RangeOfInteraction == 0) return false; // Only possible when state -> ReturnToBase
+        return currentTarget.RangeOfInteraction >= Vector3.Distance(transform.position, targetPosition);
     }
 
     private void OnInteractionTargetDespawn(object sender, EventArgs e)
     {
-        interactionDirection = Vector3.up;
-        interactionUnit = null;
-        interactionBuilding = null;
-        interactionResource = null;
+        if (currentTarget.Unit != null) currentTarget.Unit.OnUnitDespawn -= OnInteractionTargetDespawn;
+        if (currentTarget.Resource != null) currentTarget.Resource.OnResourceDespawn -= OnInteractionTargetDespawn;
+        
+        currentTarget = null;
     }
 
-    //private void Interact()
-    //{
-    //    if (interactionDirection == null) return;
+    private void RotateTowards(Vector3 direction)
+    {
+        float speedBoost = 1f;
+        float angleDifference = Vector3.Angle(transform.forward, direction);
 
-    //    if (interactionUnit != null && interactionUnit.health.Value <= 0)
-    //    {
-    //        interactionDirection = null;
-    //        interactionUnit = null;
-    //        return;
-    //    }
-    //    if (closestInteractionBuilding != null && !closestInteractionBuilding.IsOwner && (stamina <= 0|| carryingWeight >= carryCapacity))
-    //    {
-    //        interactionDirection = null;
-    //        closestInteractionBuilding = null;
-    //        return;
-    //    }
-    //    if (closestInteractionResource != null && closestInteractionResource.weight.Value <= 0)
-    //    {
-    //        interactionDirection = null;
-    //        closestInteractionResource = null;
-    //        return;
-    //    }
+        // Dynamic rotation speed based on urgency
+        if (angleDifference > 45f)
+        {
+            speedBoost = Mathf.Lerp(2f, 4f, (angleDifference - 45f) / 90f);
+        }
 
-    //    deltaTime = Time.deltaTime;
-    //    stamina -= deltaTime;
+        Quaternion targetRotation = Quaternion.LookRotation(direction);
+        rb.rotation = Quaternion.Slerp(rb.rotation, targetRotation,
+            movementSettings.RotationSpeed * speedBoost * Time.fixedDeltaTime);
+    }
 
-    //    if (interactionUnit != null)
-    //    {
-    //        interactionUnit.InteractWithOtherUnitServerRpc(attackDamage * deltaTime); // other unit takes damage from this unit
-    //    }
-    //    else if (closestInteractionBuilding != null)
-    //    {
-    //        bool closestInteractionBuildingIsOccupied = closestInteractionBuilding.occupationStatus == Building.Occupation.Occupied ? true : false;
-    //        if (closestInteractionBuilding.isNeutralBuilding && (!closestInteractionBuilding.IsOwner || !closestInteractionBuildingIsOccupied))
-    //        {
-    //            closestInteractionBuilding.InteractWithBuildingServerRpc(gatherPower * deltaTime);
-    //        }
-    //    }
-    //    else if (closestInteractionResource != null)
-    //    {
-    //        closestInteractionResource.InteractWithResourceServerRpc(gatherPower * deltaTime);
-    //        carryingWeight += gatherPower * deltaTime;
-    //    }
+    private bool ObstacleInFront(out Vector3 avoidanceDirection)
+    {
+        avoidanceDirection = transform.forward;
+        bool obstacleDetected = false;
+        float leftWeight = 0f;
+        float rightWeight = 0f;
 
-    //    // If Unit is full, this will trigger Search which will lead to going back to base
-    //    if (stamina <= 0 || carryingWeight >= carryCapacity)
-    //    {
-    //        interactionDirection = null;
-    //        interactionUnit = null;
-    //        closestInteractionBuilding = null;
-    //        closestInteractionResource = null;
-    //        directionToMoveAfterSpawn = directionToMoveBackToBase;
-    //    }
-    //}
+        float[] rayAngles = { -30f, -15f, 0f, 15f, 30f }; // Wider detection
+        float[] rayDistances = { 1f, 0.8f, 0.6f, 0.8f, 1f }; // Different distances per angle
+
+        for (int i = 0; i < rayAngles.Length; i++)
+        {
+            float angle = rayAngles[i];
+            float distance = rayDistances[i] * obstacleDetectionDistance;
+            Vector3 rayDir = Quaternion.Euler(0, angle, 0) * transform.forward;
+            Vector3 rayStart = transform.position + transform.up * 0.1f;
+
+            Debug.DrawRay(rayStart, rayDir, Color.red);
+
+            if (Physics.Raycast(rayStart, rayDir, out RaycastHit hit, distance))
+            {
+                if (IsCurrentTarget(hit.collider)) continue;
+
+                obstacleDetected = true;
+                float weight = 1 - (hit.distance / distance);
+
+                // Determine steering direction based on ray angle
+                if (angle < 0)
+                {
+                    // Left side obstacle - accumulate right steering
+                    rightWeight += weight;
+                }
+                else if (angle > 0)
+                {
+                    // Right side obstacle - accumulate left steering
+                    leftWeight += weight;
+                }
+                else
+                {
+                    // Center obstacle - check both sides
+                    rightWeight += weight;
+                    leftWeight += weight;
+                }
+            }
+        }
+
+        if (!obstacleDetected) return false;
+
+        // Calculate final avoidance direction
+        if (leftWeight > rightWeight)
+        {
+            // Steer left with intensity based on weight difference
+            avoidanceDirection = Vector3.Lerp(transform.forward, -transform.right,
+                Mathf.Clamp01(leftWeight - rightWeight)).normalized;
+        }
+        else if (rightWeight > leftWeight)
+        {
+            // Steer right with intensity based on weight difference
+            avoidanceDirection = Vector3.Lerp(transform.forward, transform.right,
+                Mathf.Clamp01(rightWeight - leftWeight)).normalized;
+        }
+        else
+        {
+            // Equal weights - move backward
+            avoidanceDirection = -transform.forward;
+        }
+
+        Debug.DrawRay(transform.position, avoidanceDirection * 2f, Color.magenta);
+        return true;
+    }
+
+    private bool IsCurrentTarget(Collider detectedCollider)
+    {
+        if (currentTarget == null) return false;
+        // ReturningToBase specific case, as it doesn't have currentTarget.Building to check
+        if (currentTarget.RangeOfInteraction == 0f
+            && currentTarget.Position + (Vector3.up * 0.25f) == detectedCollider.transform.position) return true;
+        // Check if detected collider belongs to current target
+        return (currentTarget.Unit != null && detectedCollider.transform.IsChildOf(currentTarget.Unit.transform)) ||
+               (currentTarget.Building != null && detectedCollider.transform.IsChildOf(currentTarget.Building.transform)) ||
+               (currentTarget.Resource != null && detectedCollider.transform.IsChildOf(currentTarget.Resource.transform));
+    }
+
+    private InteractionTarget FindNearestInteraction()
+    {
+        InteractionTarget nearest = new InteractionTarget();
+        float nearestDistance = float.MaxValue;
+
+        // Priority order: Units -> Buildings -> Resources
+        CheckForEnemyUnits(ref nearest, ref nearestDistance);
+        if (nearest.Unit != null) return nearest;
+
+        CheckForBuildings(ref nearest, ref nearestDistance);
+        if (nearest.Building != null) return nearest;
+
+        CheckForResources(ref nearest, ref nearestDistance);
+        if (nearest.Resource != null) return nearest;
+
+        return null;
+    }
+
+    private void CheckForEnemyUnits(ref InteractionTarget target, ref float nearestDistance)
+    {
+        if (stamina <= 0) return;
+
+        Collider[] results = new Collider[searchSettings.MaxUnits];
+        int count = Physics.OverlapSphereNonAlloc(transform.position, searchSettings.CurrentRadius, results, unitLayerMask);
+        
+        for (int i = 0; i < count; i++)
+        {
+            Unit unit = results[i].GetComponentInParent<Unit>();
+            if (unit != null && unit.OwnerClientId != OwnerClientId)
+            {
+                float distance = Vector3.Distance(transform.position, unit.transform.position);
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    target.Unit = unit;
+                    target.Position = unit.transform.position;
+                    target.RangeOfInteraction = rangeOfInteraction;
+                    unit.OnUnitDespawn += OnInteractionTargetDespawn;
+                }
+            }
+        }
+    }
+
+    private void CheckForBuildings(ref InteractionTarget target, ref float nearestDistance)
+    {
+        Collider[] results = new Collider[searchSettings.MaxBuildings];
+        int count = Physics.OverlapSphereNonAlloc(transform.position, searchSettings.CurrentRadius, results, buildingLayerMask);
+
+        for (int i = 0; i < count; i++)
+        {
+            Building building = results[i].GetComponentInParent<Building>();
+
+            if (!building.isNeutralBuilding) continue;
+
+            bool buildingIsOccupied = building.occupationStatus == Building.Occupation.Occupied ? true : false;
+            bool buildingBelongsToUnitOwner = building.OwnerClientId == OwnerClientId;
+
+            if (building != null && (!buildingBelongsToUnitOwner || !buildingIsOccupied))
+            {
+                float distance = Vector3.Distance(transform.position, building.transform.position);
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    target.Building = building;
+                    target.Position = building.transform.position;
+                    target.RangeOfInteraction = 0.5f + 0.125f + 0.125f;
+                }
+            }
+        }
+    }
+
+    private void CheckForResources(ref InteractionTarget target, ref float nearestDistance)
+    {
+        if (stamina <= 0) return;
+
+        Collider[] results = new Collider[searchSettings.MaxResources];
+        int count = Physics.OverlapSphereNonAlloc(transform.position, searchSettings.CurrentRadius, results, resourceLayerMask);
+
+        for (int i = 0; i < count; i++)
+        {
+            Resource resource = results[i].GetComponentInParent<Resource>();
+
+            if (resource != null)
+            {
+                float distance = Vector3.Distance(transform.position, resource.transform.position);
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    target.Resource = resource;
+                    target.Position = resource.transform.position;
+                    target.RangeOfInteraction = resource.rangeOfInteraction;
+                    resource.OnResourceDespawn += OnInteractionTargetDespawn;
+                }
+            }
+        }
+    }
+
+    private bool CanInteract()
+    {
+        bool canInteract = stamina > 0 && carryingWeight < stats.CarryCapacity;
+        if (currentTarget.Unit != null) canInteract &= currentTarget.Unit.health.Value > 0;
+        if (currentTarget.Building != null) canInteract &= currentTarget.Building.isNeutralBuilding 
+                && (currentTarget.Building.occupationStatus == Building.Occupation.Empty || !currentTarget.Building.IsOwner);
+        if (currentTarget.Resource != null) canInteract &= currentTarget.Resource.weight.Value > 0;
+        return canInteract;
+    }
+
+    private bool ShouldReturnToBase()
+    {
+        return stamina <= 0 || carryingWeight >= stats.CarryCapacity;
+    }
+
+    private void PerformInteraction()
+    {
+        // Implement specific interaction logic here
+        stamina -= Time.fixedDeltaTime;
+
+        if (currentTarget.Unit != null)
+        {
+            currentTarget.Unit.InteractWithOtherUnitServerRpc(stats.AttackDamage * Time.fixedDeltaTime);
+        }
+        else if (currentTarget.Building != null)
+        {
+            currentTarget.Building.InteractWithBuildingServerRpc(stats.GatherPower * Time.fixedDeltaTime);
+        }
+        else if (currentTarget.Resource != null)
+        {
+            carryingWeight += stats.GatherPower * Time.fixedDeltaTime;
+            currentTarget.Resource.InteractWithResourceServerRpc(stats.GatherPower * Time.fixedDeltaTime);
+        }
+    }
+
+    private void TransitionState(UnitState newState)
+    {
+        currentState = newState;
+        searchSettings.CurrentRadius = searchSettings.DefaultRadius;
+
+        switch (newState)
+        {
+            case UnitState.ReturningToBase:
+                currentTarget = new InteractionTarget { Position = basePosition, RangeOfInteraction = 0f };
+                break;
+            case UnitState.SearchingForInteraction:
+                currentTarget = null; // Clear any previous target
+                break;
+            case UnitState.ApproachingTarget:
+                // Ensure we have a valid target
+                if (currentTarget == null)
+                {
+                    TransitionState(UnitState.SearchingForInteraction);
+                }
+                break;
+        }
+    }
+    #endregion
 
     [Rpc(SendTo.Server)]
     private void InteractWithOtherUnitServerRpc(float damage)
@@ -404,16 +538,46 @@ public class Unit : NetworkBehaviour
         if (health.Value <= 0) DespawnUnit();
     }
 
-    [Rpc(SendTo.Server)]
-    private void SetPlayerHealthServerRpc(float newHealth)
-    {
-        health.Value = newHealth;
-    }
-
     private void DespawnUnit()
     {
-        NetworkObject.Despawn(false);
+        NotifyClientsUnitDespawnEverybodyRpc();
         serverOwnerBuilding.ResetUnit(minerIndex);
+        NetworkObject.Despawn(false);
         gameObject.SetActive(false);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void NotifyClientsUnitDespawnEverybodyRpc()
+    {
+        OnUnitDespawn?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (currentState == UnitState.ReturningToBase && collision.collider != null)
+        {
+            Building building = collision.collider.GetComponentInParent<Building>();
+            if (building != null && building.IsOwner && building.occupationStatus == Building.Occupation.Occupied)
+            {
+                currentTarget = new InteractionTarget { Building = building };
+                TransitionState(UnitState.Restoring);
+            }
+        }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if (!Application.isPlaying) return;
+
+        // Draw current target
+        if (currentTarget != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawLine(transform.position, currentTarget.Position);
+        }
+
+        // Draw search radius
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireSphere(transform.position, searchSettings.CurrentRadius);
     }
 }

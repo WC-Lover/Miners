@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6725657221771162430}
   - component: {fileID: 8218292231737639343}
   - component: {fileID: 7063464026603603046}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: LeftWall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -120,7 +120,7 @@ GameObject:
   - component: {fileID: 4684000544645388535}
   - component: {fileID: 4868437601690445896}
   - component: {fileID: 2693759617422395618}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: BottomWall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -228,7 +228,7 @@ GameObject:
   - component: {fileID: 615367211717918513}
   - component: {fileID: 2399977088181459437}
   - component: {fileID: 7726801606344425662}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: 'RightWall '
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -372,7 +372,7 @@ GameObject:
   - component: {fileID: 7728456439082586545}
   - component: {fileID: 1498135314032715854}
   - component: {fileID: 2215297865877282644}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: TopWall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -480,7 +480,7 @@ GameObject:
   - component: {fileID: 6224535027055411573}
   - component: {fileID: 2143548842916161439}
   - component: {fileID: 1541021985232233060}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Plane
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -533,7 +533,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: eeb9760792238e149b00c71dc87639ec, type: 2}
+  - {fileID: 2100000, guid: 880fd42ced46d17419521403e8a0b285, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

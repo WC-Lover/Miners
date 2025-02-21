@@ -36,7 +36,7 @@ public class ResourceSpawner : MonoBehaviour
     private Dictionary<int, List<int>> indexToAvailableZoneListDictionary;
 
     [SerializeField] private float resourceSpawnTime;
-    private float resourceSpawnTimeMax;
+    [SerializeField] private float resourceSpawnTimeMax;
     private bool allOccupied = false;
 
     private void Awake()
@@ -44,6 +44,7 @@ public class ResourceSpawner : MonoBehaviour
         Instance = this;
 
         resourceSpawnTimeMax = 10;
+        //resourceSpawnTimeMax = 0;
         resourceSpawnTime = 0;
 
         // DICTIONARY KEY: INDEX | VALUE: LIST<TRANSFORM>

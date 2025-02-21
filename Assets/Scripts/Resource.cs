@@ -10,10 +10,12 @@ public class Resource : NetworkBehaviour
     private int occupiedZoneIndex;
     private int occupiedIndex;
     [SerializeField] private Material resourceMaterial;
+    public float rangeOfInteraction;
     public EventHandler OnResourceDespawn;
 
     public override void OnNetworkSpawn()
     {
+
         // Change material for the Resource
         var meshRenderers = GetComponentsInChildren<MeshRenderer>();
         var meshRendererMaterials = new Material[1];
@@ -23,19 +25,20 @@ public class Resource : NetworkBehaviour
             meshRenderers[i].materials = meshRendererMaterials;
         }
 
-        if (!IsServer) return;
-
         if (resourceType == ResourceType.Common)
         {
-            weight.Value = 3;
+            rangeOfInteraction = 0.27f; // 0.125(UnitWidth / 2) + 0.1(CommonResourceWidth / 2) + 0.035
+            if (IsServer) weight.Value = 3;
         }
         else if (resourceType == ResourceType.Rare)
         {
-            weight.Value = 6;
+            rangeOfInteraction = 0.31f; // 0.125(UnitWidth / 2) + 0.15(RareResourceWidth / 2) + 0.035
+            if (IsServer) weight.Value = 6;
         }
         else if (resourceType == ResourceType.Holy)
         {
-            weight.Value = 200;
+            rangeOfInteraction = 0.66f; // 0.125(UnitWidth / 2) + 0.5(HolyResourceWidth / 2) + 0.035
+            if (IsServer) weight.Value = 200;
         }
     }
 
@@ -55,6 +58,8 @@ public class Resource : NetworkBehaviour
 
     private void ResourceHasBeenGathered()
     {
+        NotifyClientsResourceDespawnEverybodyRpc();
+
         if (resourceType == ResourceType.Rare)
         {
             // Apply buff to unit who gathered the resource?
@@ -63,14 +68,18 @@ public class Resource : NetworkBehaviour
         {
             Debug.Log("Winner");
         }
-        Debug.Log("Despawning");
         ResourceSpawner.Instance.ClearOccupiedZone(occupiedIndex, occupiedZoneIndex);
 
         // If resource is Interaction target for any Unit, notify about its despawn, so they would change target before they completely approached it.
-        OnResourceDespawn?.Invoke(this, EventArgs.Empty);
         
         NetworkObject.Despawn(false);
         gameObject.SetActive(false);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void NotifyClientsResourceDespawnEverybodyRpc()
+    {
+        OnResourceDespawn?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetOccupiedZone(int occupiedIndex, int occupiedZoneIndex)
