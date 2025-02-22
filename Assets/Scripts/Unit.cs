@@ -12,16 +12,16 @@ public class Unit : NetworkBehaviour
     [SerializeField] private LayerMask unitLayerMask;
     [SerializeField] private LayerMask buildingLayerMask;
     [SerializeField] private LayerMask resourceLayerMask;
-    [SerializeField] private Material unitPlayerMaterial;
-    [SerializeField] private Material defaultUnitMaterial;
+    [SerializeField] private Material playerUnitMaterial;
+    [SerializeField] private Material enemyUnitMaterial;
 
     [Header("Debug")]
     [SerializeField] private UnitState currentState;
-    [SerializeField] private float stamina;
+    [SerializeField] public float stamina;
     [SerializeField] private float carryingWeight;
     [SerializeField] private float carryingWeightReturned;
 
-    private NetworkVariable<float> health = new NetworkVariable<float>();
+    public NetworkVariable<float> health = new NetworkVariable<float>();
     private UnitStats stats;
     private SearchSettings searchSettings;
     private MovementSettings movementSettings;
@@ -32,8 +32,12 @@ public class Unit : NetworkBehaviour
     private float rangeOfInteraction;
 
     private Vector3 basePosition;
-    private Material[] originalMaterials;
     public EventHandler OnUnitDespawn;
+    public event EventHandler<OnStaminaChangedEventArgs> OnStaminaChanged;
+    public class OnStaminaChangedEventArgs : EventArgs
+    {
+        public float stamina;
+    }
 
     private enum UnitState
     {
@@ -82,26 +86,28 @@ public class Unit : NetworkBehaviour
 
     public void SetOwnerBuildingForServer(Building ownerBuilding) => serverOwnerBuilding = ownerBuilding;
     public void SetHealthForUnit(int buildingLevel) => health.Value = buildingLevel + 3;
+    public void SetUnitUIMaxStats()
+    {
+        var unitUI = GetComponentInChildren<UnitUI>();
+        unitUI.unitMaxHealth = health.Value;
+        unitUI.unitMaxStamina = stats.StaminaMax;
+    }
 
     [Rpc(SendTo.Owner)]
     public void InitializeOwnerRpc(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, int minerIndex)
     {
         if (!IsOwner) return;
 
-        InitializeComponents();
+        rb = GetComponent<Rigidbody>();
+
         InitializeStats(buildingLevel, basePosition, spawnDirection);
+        SetUnitUIMaxStats();
         InitializeMaterials();
         TransitionState(UnitState.ApproachingSpawnPosition);
         currentTarget = new InteractionTarget { Position = spawnDirection, RangeOfInteraction = 0.14f }; // range is unit width / 2 + 0.015f
 
         this.minerIndex = minerIndex;
         this.basePosition = basePosition;
-    }
-
-    private void InitializeComponents()
-    {
-        rb = GetComponent<Rigidbody>();
-        originalMaterials = GetComponentInChildren<MeshRenderer>().materials;
     }
 
     private void InitializeStats(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection)
@@ -138,10 +144,15 @@ public class Unit : NetworkBehaviour
 
     private void InitializeMaterials()
     {
-        var newMaterials = new Material[originalMaterials.Length];
-        Array.Copy(originalMaterials, newMaterials, originalMaterials.Length);
-        newMaterials[0] = unitPlayerMaterial;
-        GetComponentInChildren<MeshRenderer>().materials = newMaterials;
+        MeshRenderer[] meshRenderers = GetComponentsInChildren<MeshRenderer>();
+        Material[] meshRendererMaterials = new Material[1];
+
+        meshRendererMaterials[0] = IsOwner ? playerUnitMaterial : enemyUnitMaterial;
+
+        for (int i = 0; i < meshRenderers.Length; i++)
+        {
+            meshRenderers[i].materials = meshRendererMaterials;
+        }
     }
 
     private void FixedUpdate()
@@ -227,16 +238,17 @@ public class Unit : NetworkBehaviour
 
     private void UpdateReturnToBase()
     {
-        MoveTowards(currentTarget.Position); // BasePosition
+        if (currentTarget != null) MoveTowards(currentTarget.Position); // BasePosition
     }
 
     private void UpdateRestore()
     {
-        if (currentTarget.Building != null && currentTarget.Building.IsOwner)
+        if (currentTarget != null && currentTarget.Building != null && currentTarget.Building.IsOwner)
         {
             currentTarget.Building.BuildingGainXP(carryingWeight * Time.fixedDeltaTime);
             carryingWeight = Mathf.Max(carryingWeight - Time.fixedDeltaTime, 0);
             stamina = Mathf.Min(stamina + Time.fixedDeltaTime, stats.StaminaMax);
+            OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
         }
         if (stamina >= stats.StaminaMax && carryingWeight <= 0)
         {
@@ -270,9 +282,21 @@ public class Unit : NetworkBehaviour
 
     private void OnInteractionTargetDespawn(object sender, EventArgs e)
     {
-        if (currentTarget.Unit != null) currentTarget.Unit.OnUnitDespawn -= OnInteractionTargetDespawn;
-        if (currentTarget.Resource != null) currentTarget.Resource.OnResourceDespawn -= OnInteractionTargetDespawn;
-        
+        if (currentTarget == null) return;
+
+        // Cleanup event subscriptions
+        if (currentTarget.Unit != null)
+        {
+            currentTarget.Unit.OnUnitDespawn -= OnInteractionTargetDespawn;
+            currentTarget.Unit = null;
+        }
+
+        if (currentTarget.Resource != null)
+        {
+            currentTarget.Resource.OnResourceDespawn -= OnInteractionTargetDespawn;
+            currentTarget.Resource = null;
+        }
+
         currentTarget = null;
     }
 
@@ -288,8 +312,9 @@ public class Unit : NetworkBehaviour
         }
 
         Quaternion targetRotation = Quaternion.LookRotation(direction);
-        rb.rotation = Quaternion.Slerp(rb.rotation, targetRotation,
-            movementSettings.RotationSpeed * speedBoost * Time.fixedDeltaTime);
+        rb.rotation = targetRotation;
+        //rb.rotation = Quaternion.Slerp(rb.rotation, targetRotation,
+        //    movementSettings.RotationSpeed * speedBoost * Time.fixedDeltaTime);
     }
 
     private bool ObstacleInFront(out Vector3 avoidanceDirection)
@@ -491,7 +516,6 @@ public class Unit : NetworkBehaviour
     {
         // Implement specific interaction logic here
         stamina -= Time.fixedDeltaTime;
-
         if (currentTarget.Unit != null)
         {
             currentTarget.Unit.InteractWithOtherUnitServerRpc(stats.AttackDamage * Time.fixedDeltaTime);
@@ -505,6 +529,7 @@ public class Unit : NetworkBehaviour
             carryingWeight += stats.GatherPower * Time.fixedDeltaTime;
             currentTarget.Resource.InteractWithResourceServerRpc(stats.GatherPower * Time.fixedDeltaTime);
         }
+        OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
     }
 
     private void TransitionState(UnitState newState)
@@ -549,7 +574,9 @@ public class Unit : NetworkBehaviour
     [Rpc(SendTo.Everyone)]
     private void NotifyClientsUnitDespawnEverybodyRpc()
     {
+        // Unsubscribe to avoid Memory Leaks and Ghost Callbacks
         OnUnitDespawn?.Invoke(this, EventArgs.Empty);
+        OnUnitDespawn = null; // just to be sure
     }
 
     private void OnCollisionEnter(Collision collision)

@@ -29,9 +29,27 @@ public class Building : NetworkBehaviour
     public bool isNeutralBuilding;
     private ulong claimedByPlayerWithClientId;
     private float claimingPercentage;
+    public EventHandler<OnClaimingPercentageChangedEventArgs> OnClaimingPercentageChanged;
+    public class OnClaimingPercentageChangedEventArgs: EventArgs
+    {
+        public float claimingPercentage;
+    }
+    public EventHandler<OnUnitSpawnTimeChangedEventArgs> OnUnitSpawnTimeChanged;
+    public class OnUnitSpawnTimeChangedEventArgs : EventArgs
+    {
+        public float unitSpawnTimer;
+        public float unitSpawnTimerMax;
+    }
+    public EventHandler<OnBuildingXPChangedEventArgs> OnBuildingXPChanged;
+    public class OnBuildingXPChangedEventArgs : EventArgs
+    {
+        public float buildingXP;
+        public float buildingXPMax;
+    }
     // MATERIALS
     [SerializeField] private Material playerBuildingMaterial;
-    [SerializeField] private Material defaultBuildingMaterial;
+    [SerializeField] private Material enemyPlayerBuildingMaterial;
+    [SerializeField] private Material neutralBuildingMaterial;
 
     public enum Occupation
     {
@@ -45,17 +63,15 @@ public class Building : NetworkBehaviour
         this.baseOfOriginPosition = baseOfOriginPosition;
         this.isNeutralBuilding = isNeutralBuilding;
         occupationStatus = isNeutralBuilding ? Occupation.Empty : Occupation.Occupied;
-        if (!isNeutralBuilding && IsOwner)
+
+        var meshRenderers = GetComponentsInChildren<MeshRenderer>();
+        var meshRendererMaterials = new Material[1];
+
+        meshRendererMaterials[0] = isNeutralBuilding ? neutralBuildingMaterial : (IsOwner ? playerBuildingMaterial : enemyPlayerBuildingMaterial);
+
+        for (int i = 0; i < meshRenderers.Length; i++)
         {
-            var meshRenderers = GetComponentsInChildren<MeshRenderer>();
-            var meshRendererMaterials = new Material[1];
-
-            meshRendererMaterials[0] = playerBuildingMaterial;
-
-            for (int i = 0; i < meshRenderers.Length; i++)
-            {
-                meshRenderers[i].materials = meshRendererMaterials;
-            }
+            meshRenderers[i].materials = meshRendererMaterials;
         }
     }
 
@@ -90,14 +106,26 @@ public class Building : NetworkBehaviour
         // Only player building can spawn units | If unit claims the buildign it becomes non-neutral
         if (!IsOwner || occupationStatus == Occupation.Empty || amoutOfMinersSpawned == amoutOfMinersMax) return;
 
-        if (unitSpawnTime > 0) unitSpawnTime -= Time.deltaTime;
+        if (unitSpawnTime > 0)
+        {
+            unitSpawnTime -= Time.deltaTime;
+            OnUnitSpawnTimeChanged?.Invoke(this, new OnUnitSpawnTimeChangedEventArgs {
+                unitSpawnTimer = this.unitSpawnTime, unitSpawnTimerMax = this.unitSpawnTimeMax
+            });
+        }
         else if (PlayerMouseInput.Instance.lastWorldPosition != Vector3.zero)
         {
             unitSpawnTime = unitSpawnTimeMax;
+            OnUnitSpawnTimeChanged?.Invoke(this, new OnUnitSpawnTimeChangedEventArgs
+            {
+                unitSpawnTimer = this.unitSpawnTime,
+                unitSpawnTimerMax = this.unitSpawnTimeMax
+            });
             SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
             amoutOfMinersSpawned++;
         }
-        //if (Input.GetMouseButtonDown(0))
+        // Add possibility to press right mouse button to spawn with faster interval or all at once?
+        //if (Input.GetMouseButtonDown(1))
         //{
         //    SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
         //}
@@ -117,7 +145,6 @@ public class Building : NetworkBehaviour
         disabledMinersIndexes.Remove(minerIndex);
         // Set-up unit
         Unit unit = unitTransform.GetComponent<Unit>();
-        //Unit_Reworked unit = unitTransform.GetComponent<Unit_Reworked>();
         // Spawn with ownership of the building owner
         unit.NetworkObject.SpawnWithOwnership(serverRpcParams.Receive.SenderClientId);
         unit.SetOwnerBuildingForServer(this);
@@ -129,11 +156,17 @@ public class Building : NetworkBehaviour
     {
         if (buildingLevel >= buildingLevelMax) return;
         buildingXP += xp + (buildingLevel * 0.5f);
+        OnBuildingXPChanged?.Invoke(this, new OnBuildingXPChangedEventArgs
+        {
+            buildingXP = this.buildingXP,
+            buildingXPMax = this.buildingXPMax,
+        });
 
         if (buildingXP >= buildingXPMax)
         {
             buildingLevel++;
-            buildingXPMax = buildingXPMax * 2;
+            buildingXPMax = buildingXPMax * 1.5f;
+            buildingXP = 0;
             unitSpawnTimeMax = unitSpawnTimeMax * 0.92f;
         }
     }
@@ -156,7 +189,6 @@ public class Building : NetworkBehaviour
             {
                 // Player who claimed this building before has lost its' ownership
                 UpdateOccupationStatusOfTheBuildingEveryoneRpc(Occupation.Empty);
-                NotifyBuildingHasLostOwnerRpc();
             }
 
             if (claimingPercentage > claimPower)
@@ -187,39 +219,32 @@ public class Building : NetworkBehaviour
             if (occupationStatus != Occupation.Occupied)
             {
                 UpdateOccupationStatusOfTheBuildingEveryoneRpc(Occupation.Occupied);
-                NotifyBuildingNewOwnerRpc();
             }
         }
+
+        UpdateClaimPercentageEveryoneRpc(claimingPercentage);
     }
 
-    [Rpc(SendTo.Owner)]
-    private void NotifyBuildingHasLostOwnerRpc()
+    [Rpc(SendTo.Everyone)]
+    private void UpdateClaimPercentageEveryoneRpc(float claimingPercentage)
     {
-        var meshRenderers = GetComponentsInChildren<MeshRenderer>();
-        var meshRendererMaterials = new Material[1];
-        meshRendererMaterials[0] = defaultBuildingMaterial;
-        for (int i = 0; i < meshRenderers.Length; i++)
-        {
-            meshRenderers[i].materials = meshRendererMaterials;
-        }
-    }
-
-    [Rpc(SendTo.Owner)]
-    private void NotifyBuildingNewOwnerRpc()
-    {
-        var meshRenderers = GetComponentsInChildren<MeshRenderer>();
-        var meshRendererMaterials = new Material[1];
-        meshRendererMaterials[0] = playerBuildingMaterial;
-        for (int i = 0; i < meshRenderers.Length; i++)
-        {
-            meshRenderers[i].materials = meshRendererMaterials;
-        }
+        OnClaimingPercentageChanged?.Invoke(this, new OnClaimingPercentageChangedEventArgs { claimingPercentage = claimingPercentage});
     }
 
     [Rpc(SendTo.Everyone)]
     private void UpdateOccupationStatusOfTheBuildingEveryoneRpc(Occupation updatedOccupationStatus)
     {
         occupationStatus = updatedOccupationStatus;
+
+        var meshRenderers = GetComponentsInChildren<MeshRenderer>();
+        var meshRendererMaterials = new Material[1];
+        meshRendererMaterials[0] = updatedOccupationStatus == Occupation.Empty ? neutralBuildingMaterial :
+            (IsOwner ? playerBuildingMaterial : enemyPlayerBuildingMaterial);
+
+        for (int i = 0; i < meshRenderers.Length; i++)
+        {
+            meshRenderers[i].materials = meshRendererMaterials;
+        }
     }
 
     public void ResetUnit(int unitIndex)

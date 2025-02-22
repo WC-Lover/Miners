@@ -6,11 +6,15 @@ using Random = UnityEngine.Random;
 
 public class ResourceSpawner : MonoBehaviour
 {
-
     public static ResourceSpawner Instance;
 
     [SerializeField] private Transform commonResourcePrefab;
     [SerializeField] private Transform rareResourcePrefab;
+    [SerializeField] private Transform holyResourcePrefab;
+
+    [SerializeField] private float resourceSpawnTime;
+    [SerializeField] private float resourceSpawnTimeMax;
+    private bool allOccupied = false;
 
     // COMMON/RARE RESOURCE ZONE BETWEEN PLAYERS LISTS
     private List<Transform> disabledCommonResourceTransformListZoneBetween;
@@ -34,10 +38,6 @@ public class ResourceSpawner : MonoBehaviour
     // DICTIONARY KEY: INDEX | VALUE: LIST<TRANSFORM>
     private Dictionary<int, List<Transform>> indexToZoneListDictionary;
     private Dictionary<int, List<int>> indexToAvailableZoneListDictionary;
-
-    [SerializeField] private float resourceSpawnTime;
-    [SerializeField] private float resourceSpawnTimeMax;
-    private bool allOccupied = false;
 
     private void Awake()
     {
@@ -151,6 +151,8 @@ public class ResourceSpawner : MonoBehaviour
         indexToAvailableZoneListDictionary[4] = availableDisabledResourcesIndexesZoneThree;
         indexToAvailableZoneListDictionary[6] = availableDisabledResourcesIndexesZoneFour;
         indexToAvailableZoneListDictionary[8] = availableDisabledResourcesIndexesZoneBetween;
+
+        SpawnHolyResource();
     }
 
     private void Update()
@@ -163,7 +165,7 @@ public class ResourceSpawner : MonoBehaviour
             return;
         }
 
-        int resourceType = Random.Range(0, 11); // 0-10, 0-7(70%) common, 8-10(30%)
+        int resourceType = Random.Range(0, 11); // 0-10, 0-7(70%) common, 8-10(30%) rare
         SpawnResource(resourceType <= 7 ? Resource.ResourceType.Common : Resource.ResourceType.Rare);
     }
 
@@ -194,11 +196,19 @@ public class ResourceSpawner : MonoBehaviour
             resourceTransformToSpawn.gameObject.SetActive(true);
             // Spawn resource for other players
             resourceTransformToSpawn.GetComponent<NetworkObject>().Spawn();
+            resourceTransformToSpawn.GetComponent<Resource>().SetResourceWeight();
             // Save occupied zone index and index of resource on this zone
             resourceTransformToSpawn.GetComponent<Resource>().SetOccupiedZone(randomIndex, i);
         }
 
         allOccupied = allOccupiedTemp;
+    }
+
+    private void SpawnHolyResource()
+    {
+        GameObject holyResource = Instantiate(holyResourcePrefab, Vector3.zero, Quaternion.identity).gameObject;
+        holyResource.GetComponent<NetworkObject>().Spawn();
+        holyResource.SetActive(true);
     }
 
     public void ClearOccupiedZone(int occupiedIndex, int occupiedZoneIndex)

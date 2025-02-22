@@ -10,7 +10,6 @@ public class GameConnectionManager : NetworkBehaviour
     [SerializeField] private GameObject playerBuildingPrefab;
     [SerializeField] private GameObject neutralBuildingPrefab;
     [SerializeField] private GameObject resourceSpawnerPrefab;
-    [SerializeField] private GameObject holyResourcePrefab;
 
     private Vector3[] buildingSpawnPos;
     private Vector3[] buildingUnitSpawnPos;
@@ -58,7 +57,6 @@ public class GameConnectionManager : NetworkBehaviour
                 CreateBuildingForConnectedPlayer(NetworkManager.Singleton.LocalClientId);
                 AttachNeutralBuildingsOnGameStart();
                 SpawnResourceSpawner();
-                //SpawnHolyResource();
             }
             else
             {
@@ -67,19 +65,9 @@ public class GameConnectionManager : NetworkBehaviour
         }
     }
 
-    private void SpawnHolyResource()
-    {
-        GameObject holyResource = Instantiate(holyResourcePrefab, Vector3.zero, Quaternion.identity);
-        holyResource.GetComponent<NetworkObject>().Spawn();
-        holyResource.SetActive(true);
-    }
-
     private void SpawnResourceSpawner()
     {
         Instantiate(resourceSpawnerPrefab);
-        //GameObject resourceSpawner = Instantiate(resourceSpawnerPrefab);
-        //resourceSpawner.GetComponent<NetworkObject>().Spawn();
-        //resourceSpawner.SetActive(true);
     }
 
     private void AttachNeutralBuildingsOnGameStart()
