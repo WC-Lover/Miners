@@ -28,7 +28,7 @@ public class LobbyMenuUI : MonoBehaviour
 
         createLobbyButton.onClick.AddListener(() =>
         {
-            GameLobbyManager.Instance.CreateLobby($"TestLobby_{playerNameInputField.text}", false);
+            GameLobbyManager.Instance.CreateLobby($"Lobby_{playerNameInputField.text}", false);
         });
 
         joinLobbyButton.onClick.AddListener(() =>

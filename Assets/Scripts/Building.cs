@@ -19,6 +19,13 @@ public class Building : NetworkBehaviour
     private Vector3 baseOfOriginPosition;
     private const int amoutOfMinersMax = 20;
     private int amoutOfMinersSpawned;
+
+    private BonusSelectUI.Bonus tempBonus;
+    private BonusSelectUI.Bonus permBonus;
+
+    private float holyResourceGathered = 0;
+
+    private bool unitsAllowedToSpawn = false;
     // SERVER STATS
     [SerializeField] private Transform unitPrefab;
     private Vector3 unitSpawnPoint;
@@ -29,6 +36,13 @@ public class Building : NetworkBehaviour
     public bool isNeutralBuilding;
     private ulong claimedByPlayerWithClientId;
     private float claimingPercentage;
+    // UI / MATERIALS
+    [SerializeField] private Material playerBuildingMaterial;
+    [SerializeField] private Material enemyPlayerBuildingMaterial;
+    [SerializeField] private Material neutralBuildingMaterial;
+    [SerializeField] private Transform bonusSelectionUI;
+    [SerializeField] private Transform playerBuildingUI;
+
     public EventHandler<OnClaimingPercentageChangedEventArgs> OnClaimingPercentageChanged;
     public class OnClaimingPercentageChangedEventArgs: EventArgs
     {
@@ -46,10 +60,6 @@ public class Building : NetworkBehaviour
         public float buildingXP;
         public float buildingXPMax;
     }
-    // MATERIALS
-    [SerializeField] private Material playerBuildingMaterial;
-    [SerializeField] private Material enemyPlayerBuildingMaterial;
-    [SerializeField] private Material neutralBuildingMaterial;
 
     public enum Occupation
     {
@@ -57,12 +67,25 @@ public class Building : NetworkBehaviour
         Empty
     }
 
-    [Rpc(SendTo.Everyone)]
-    public void AttachBuildingToPlayerRpc(Vector3 baseOfOriginPosition, bool isNeutralBuilding)
+    [Rpc(SendTo.Owner)]
+    public void SetBasePositionOwnerRpc(Vector3 baseOfOriginPosition, bool isNeutralBuilding)
     {
         this.baseOfOriginPosition = baseOfOriginPosition;
+        SetBuildingEveryoneRpc(isNeutralBuilding);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void SetBuildingEveryoneRpc(bool isNeutralBuilding)
+    {
         this.isNeutralBuilding = isNeutralBuilding;
+
         occupationStatus = isNeutralBuilding ? Occupation.Empty : Occupation.Occupied;
+
+        if (isNeutralBuilding)
+        {
+            permBonus = BonusSelectUI.Bonus.None;
+            tempBonus = BonusSelectUI.Bonus.None;
+        }
 
         var meshRenderers = GetComponentsInChildren<MeshRenderer>();
         var meshRendererMaterials = new Material[1];
@@ -75,7 +98,7 @@ public class Building : NetworkBehaviour
         }
     }
 
-    public void PreSpawnUnits(Vector3 unitSpawnPoint)
+    public void PreCreateUnits(Vector3 unitSpawnPoint)
     {
         claimedByPlayerWithClientId = 999;
         claimingPercentage = 0;
@@ -88,6 +111,20 @@ public class Building : NetworkBehaviour
             Transform unitTransform = Instantiate(unitPrefab, unitSpawnPoint, Quaternion.identity);
             unitTransform.gameObject.SetActive(false);
             prespawnedUnits.Add(unitTransform);
+        }
+    }
+
+    private void Awake()
+    {
+        if (IsOwner) GameManager.Instance.OnGameReady += GameManager_OnGameReady;
+    }
+
+    private void GameManager_OnGameReady(object sender, EventArgs e)
+    {
+        if (!isNeutralBuilding)
+        {
+            bonusSelectionUI.gameObject.SetActive(true);
+            playerBuildingUI.gameObject.SetActive(true);
         }
     }
 
@@ -104,7 +141,7 @@ public class Building : NetworkBehaviour
     private void Update()
     {
         // Only player building can spawn units | If unit claims the buildign it becomes non-neutral
-        if (!IsOwner || occupationStatus == Occupation.Empty || amoutOfMinersSpawned == amoutOfMinersMax) return;
+        if (!IsOwner || occupationStatus == Occupation.Empty || amoutOfMinersSpawned == amoutOfMinersMax || !unitsAllowedToSpawn) return;
 
         if (unitSpawnTime > 0)
         {
@@ -121,7 +158,7 @@ public class Building : NetworkBehaviour
                 unitSpawnTimer = this.unitSpawnTime,
                 unitSpawnTimerMax = this.unitSpawnTimeMax
             });
-            SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
+            SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition, tempBonus, permBonus);
             amoutOfMinersSpawned++;
         }
         // Add possibility to press right mouse button to spawn with faster interval or all at once?
@@ -132,7 +169,7 @@ public class Building : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void SpawnMinerServerRpc(int buildingLevel, Vector3 getBackPosition, Vector3 directionToMove, ServerRpcParams serverRpcParams = default)
+    private void SpawnMinerServerRpc(int buildingLevel, Vector3 getBackPosition, Vector3 directionToMove, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus, ServerRpcParams serverRpcParams = default)
     {
         // Get inactive miner index
         int minerIndex = disabledMinersIndexes[0];
@@ -149,11 +186,15 @@ public class Building : NetworkBehaviour
         unit.NetworkObject.SpawnWithOwnership(serverRpcParams.Receive.SenderClientId);
         unit.SetOwnerBuildingForServer(this);
         unit.SetHealthForUnit(buildingLevel);
-        unit.InitializeOwnerRpc(buildingLevel, getBackPosition, directionToMove, minerIndex);
+        unit.InitializeOwnerRpc(buildingLevel, getBackPosition, directionToMove, minerIndex, tempBonus, permBonus);
     }
 
-    public void BuildingGainXP(float xp)
+    public void BuildingGainXP(float xp, float holyResource)
     {
+        if (holyResource > 0)
+        {
+            holyResourceGathered += holyResource;
+        }
         if (buildingLevel >= buildingLevelMax) return;
         buildingXP += xp + (buildingLevel * 0.5f);
         OnBuildingXPChanged?.Invoke(this, new OnBuildingXPChangedEventArgs
@@ -263,4 +304,21 @@ public class Building : NetworkBehaviour
     {
         amoutOfMinersSpawned--;
     }
+
+    public void SetBonusAttributes(BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus)
+    {
+        this.tempBonus = tempBonus;
+        this.permBonus = permBonus;
+    }
+
+    public void AllowUnitSpawn()
+    {
+        unitsAllowedToSpawn = true;
+    }
+
+    //[Rpc(SendTo.Owner)]
+    //public void CollectHolyResourceDataOwnerRpc()
+    //{
+    //    GameManager.Instance.SendHolyResourceDataServerRpc(holyResourceGathered);
+    //}
 }

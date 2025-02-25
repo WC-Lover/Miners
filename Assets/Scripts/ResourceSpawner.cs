@@ -196,9 +196,9 @@ public class ResourceSpawner : MonoBehaviour
             resourceTransformToSpawn.gameObject.SetActive(true);
             // Spawn resource for other players
             resourceTransformToSpawn.GetComponent<NetworkObject>().Spawn();
-            resourceTransformToSpawn.GetComponent<Resource>().SetResourceWeight();
             // Save occupied zone index and index of resource on this zone
             resourceTransformToSpawn.GetComponent<Resource>().SetOccupiedZone(randomIndex, i);
+            resourceTransformToSpawn.GetComponent<Resource>().SetResourceWeight();
         }
 
         allOccupied = allOccupiedTemp;
@@ -208,6 +208,7 @@ public class ResourceSpawner : MonoBehaviour
     {
         GameObject holyResource = Instantiate(holyResourcePrefab, Vector3.zero, Quaternion.identity).gameObject;
         holyResource.GetComponent<NetworkObject>().Spawn();
+        holyResource.GetComponent<Resource>().SetResourceWeight();
         holyResource.SetActive(true);
     }
 

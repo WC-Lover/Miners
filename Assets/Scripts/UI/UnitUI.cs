@@ -14,6 +14,11 @@ public class UnitUI : MonoBehaviour
     private void Start()
     {
         // Initialize health from NetworkVariable
+        if (!unit.IsOwner)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
         healthSlider.value = 1;
         staminaSlider.value = 1;
         unit.health.OnValueChanged += Unit_OnHealthChanged;

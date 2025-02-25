@@ -7,116 +7,142 @@ using UnityEngine.UI;
 public class BonusSelectUI : MonoBehaviour
 {
 
-    [SerializeField] private TextMeshProUGUI timer;
-    [SerializeField] private Toggle damageBonusToggle;
-    [SerializeField] private Toggle damageToggle;
-    [SerializeField] private Toggle speedBonusToggle;
-    [SerializeField] private Toggle speedToggle;
-    [SerializeField] private Toggle gatherBonusToggle;
-    [SerializeField] private Toggle gatherToggle;
-    [SerializeField] private Toggle healthBonusToggle;
-    [SerializeField] private Toggle healthToggle;
+    [SerializeField] private Building building;
+
+    [SerializeField] private TextMeshProUGUI timerText;
+    [SerializeField] private float timeLeft = 10;
+
+    [Header("Temporary bonus")]
+    private bool tempBonusChosen = false;
+    [SerializeField] private Button damageTempBonusButton;
+    [SerializeField] private Button speedTempBonusButton;
+    [SerializeField] private Button gatherTempBonusButton;
+    [SerializeField] private Button staminaTempBonusButton;
+
+    [Header("Permanent bonus")]
+    private bool permBonusChosen = false;
+    [SerializeField] private Button damagePermBonusButton;
+    [SerializeField] private Button speedPermBonusButton;
+    [SerializeField] private Button gatherPermBonusButton;
+    [SerializeField] private Button staminaPermBonusButton;
+
+    private Bonus tempBonus;
+    private Bonus permBonus;
+
+    public enum Bonus
+    {
+        Damage,
+        Speed, 
+        Gather,
+        Stamina,
+        None
+    }
 
     private void Awake()
     {
-        damageBonusToggle.onValueChanged.AddListener(delegate
+        // TEMPORARY BONUS SELECTION
+        damageTempBonusButton.onClick.AddListener(() =>
         {
-            BonusToggleValueChanged(damageBonusToggle.GetComponent<Toggle>());
-        });
-        speedBonusToggle.onValueChanged.AddListener(delegate
-        {
-            BonusToggleValueChanged(speedBonusToggle.GetComponent<Toggle>());
-        });
-        gatherBonusToggle.onValueChanged.AddListener(delegate
-        {
-            BonusToggleValueChanged(gatherBonusToggle.GetComponent<Toggle>());
-        });
-        healthBonusToggle.onValueChanged.AddListener(delegate
-        {
-            BonusToggleValueChanged(healthBonusToggle.GetComponent<Toggle>());
+            MakeAllTempButtonsInteractable();
+            damageTempBonusButton.interactable = false;
+            tempBonus = Bonus.Damage;
         });
 
-        damageToggle.onValueChanged.AddListener(delegate
+        speedTempBonusButton.onClick.AddListener(() =>
         {
-            ToggleValueChanged(damageToggle.GetComponent<Toggle>());
+            MakeAllTempButtonsInteractable();
+            speedTempBonusButton.interactable = false;
+            tempBonus = Bonus.Speed;
         });
-        speedToggle.onValueChanged.AddListener(delegate
+
+        gatherTempBonusButton.onClick.AddListener(() =>
         {
-            ToggleValueChanged(speedToggle.GetComponent<Toggle>());
+            MakeAllTempButtonsInteractable();
+            gatherTempBonusButton.interactable = false;
+            tempBonus = Bonus.Gather;
         });
-        gatherToggle.onValueChanged.AddListener(delegate
+
+        staminaTempBonusButton.onClick.AddListener(() =>
         {
-            ToggleValueChanged(gatherToggle.GetComponent<Toggle>());
+            MakeAllTempButtonsInteractable();
+            staminaTempBonusButton.interactable = false;
+            tempBonus = Bonus.Stamina;
         });
-        healthToggle.onValueChanged.AddListener(delegate
+
+        // PERMANENT BONUS SELECTION
+        damagePermBonusButton.onClick.AddListener(() =>
         {
-            ToggleValueChanged(healthToggle.GetComponent<Toggle>());
+            MakeAllPermButtonsInteractable();
+            damagePermBonusButton.interactable = false;
+            permBonus = Bonus.Damage;
         });
+
+        speedPermBonusButton.onClick.AddListener(() =>
+        {
+            MakeAllPermButtonsInteractable();
+            speedPermBonusButton.interactable = false;
+            permBonus = Bonus.Speed;
+        });
+
+        gatherPermBonusButton.onClick.AddListener(() =>
+        {
+            MakeAllPermButtonsInteractable();
+            gatherPermBonusButton.interactable = false;
+            permBonus = Bonus.Gather;
+        });
+
+        staminaPermBonusButton.onClick.AddListener(() =>
+        {
+            MakeAllPermButtonsInteractable();
+            staminaPermBonusButton.interactable = false;
+            permBonus = Bonus.Stamina;
+        });
+
+        GameManager.Instance.bonusSelectTimer.OnValueChanged += GameConnectionManager_OnBonusSelectTimerChanged;
     }
 
-    private void ToggleValueChanged(Toggle toggle)
+    private void MakeAllTempButtonsInteractable()
     {
-        if (!toggle.isOn) return;
-
-        if (toggle == damageToggle)
-        {
-            speedToggle.isOn = false;
-            gatherToggle.isOn = false;
-            healthToggle.isOn = false;
-        }
-        else if (toggle == speedToggle)
-        {
-            damageToggle.isOn = false;
-            gatherToggle.isOn = false;
-            healthToggle.isOn = false;
-        }
-        else if (toggle == gatherToggle)
-        {
-            damageToggle.isOn = false;
-            speedToggle.isOn = false;
-            healthToggle.isOn = false;
-        }
-        else if (toggle == healthToggle)
-        {
-            damageToggle.isOn = false;
-            speedToggle.isOn = false;
-            gatherToggle.isOn = false;
-        }
+        damageTempBonusButton.interactable = true;
+        speedTempBonusButton.interactable = true;
+        gatherTempBonusButton.interactable = true;
+        staminaTempBonusButton.interactable = true;
+        tempBonusChosen = true;
     }
 
-    private void BonusToggleValueChanged(Toggle toggle)
+    private void MakeAllPermButtonsInteractable()
     {
-        if (!toggle.isOn) return;
-
-        if (toggle == damageBonusToggle)
-        {
-            speedBonusToggle.isOn = false;
-            gatherBonusToggle.isOn = false;
-            healthBonusToggle.isOn = false;
-        }
-        else if (toggle == speedBonusToggle)
-        {
-            damageBonusToggle.isOn = false;
-            gatherBonusToggle.isOn = false;
-            healthBonusToggle.isOn = false;
-        }
-        else if (toggle == gatherBonusToggle)
-        {
-            damageBonusToggle.isOn = false;
-            speedBonusToggle.isOn = false;
-            healthBonusToggle.isOn = false;
-        }
-        else if (toggle == healthBonusToggle)
-        {
-            damageBonusToggle.isOn = false;
-            speedBonusToggle.isOn = false;
-            gatherBonusToggle.isOn = false;
-        }
+        damagePermBonusButton.interactable = true;
+        speedPermBonusButton.interactable = true;
+        gatherPermBonusButton.interactable = true;
+        staminaPermBonusButton.interactable = true;
+        permBonusChosen = true;
     }
 
-    void Start()
+    private void GameConnectionManager_OnBonusSelectTimerChanged(float previousValue, float newValue)
     {
+        timerText.text = $"Time Left: {Mathf.Ceil(newValue)}";
+        if (Mathf.Ceil(newValue) <= 0)
+        {
+            // SET BONUS
+            building.SetBonusAttributes(tempBonus, permBonus);
+            // ALLOW UNITS SPAWN
+            building.AllowUnitSpawn();
+            GameManager.Instance.bonusSelectTimer.OnValueChanged -= GameConnectionManager_OnBonusSelectTimerChanged;
 
+            PlayerMouseInput.Instance.GameHasStarted();
+
+            gameObject.SetActive(false);
+        }
     }
 
+    private void Update()
+    {
+        if (GameManager.Instance.IsServer && timeLeft > 0)
+        {
+            timeLeft -= Time.deltaTime;
+
+            GameManager.Instance.bonusSelectTimer.Value = timeLeft;
+        }
+    }
 }

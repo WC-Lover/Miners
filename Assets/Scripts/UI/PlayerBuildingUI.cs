@@ -12,6 +12,11 @@ public class PlayerBuildingUI : MonoBehaviour
     private void Start()
     {
         // Initialize health from NetworkVariable
+        if (!building.IsOwner)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
         unitSpawnSlider.value = 1;
         buildingXPSlider.value = 0;
         building.OnUnitSpawnTimeChanged += Building_OnUnitSpawnTimeChanged;

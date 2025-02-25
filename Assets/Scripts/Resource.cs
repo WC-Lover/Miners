@@ -15,8 +15,11 @@ public class Resource : NetworkBehaviour
 
     public void SetResourceWeight() => weight.Value = resourceData.baseValue;
 
+    public bool IsHolyResource() => resourceData.type == ResourceType.Holy;
+
     public override void OnNetworkSpawn()
     {
+        GetComponentInChildren<ResourceUI>().resourceMaxWeight = resourceData.baseValue;
 
         // Change material for the Resource
         var meshRenderers = GetComponentsInChildren<MeshRenderer>();
@@ -28,7 +31,6 @@ public class Resource : NetworkBehaviour
         }
 
         rangeOfInteraction = resourceData.interactionRange;
-        GetComponentInChildren<ResourceUI>().resourceMaxWeight = resourceData.baseValue;
     }
 
     public enum ResourceType
@@ -54,15 +56,14 @@ public class Resource : NetworkBehaviour
         // If resource is Interaction target for any Unit, notify about its despawn, so they would change target before they completely approached it.
         NotifyClientsResourceDespawnEverybodyRpc();
 
-        if (resourceData.type == ResourceType.Rare)
-        {
-            // Apply buff to unit who gathered the resource?
-        }
         if (resourceData.type == ResourceType.Holy)
         {
-            // Game has finished, player who gathered most part of the holy resource wins
+            //GameManager.Instance.GameHasFinished();
         }
-        ResourceSpawner.Instance.ClearOccupiedZone(occupiedIndex, occupiedZoneIndex);
+        else
+        {
+            ResourceSpawner.Instance.ClearOccupiedZone(occupiedIndex, occupiedZoneIndex);
+        }
         
         NetworkObject.Despawn(false);
         gameObject.SetActive(false);

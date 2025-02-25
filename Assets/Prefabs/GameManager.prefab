@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: -3765961042308382250}
   - component: {fileID: 8837509298733467519}
   m_Layer: 0
-  m_Name: GameConnectionManager
+  m_Name: GameManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -67,11 +67,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 1950470908326274583}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 210229983f35afb48987af54ba9f17e7, type: 3}
+  m_Script: {fileID: 11500000, guid: 45498befe7c0e1141ac2830f9d043cb5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
+  bonusSelectTimer:
+    m_InternalValue: 10
   playerBuildingPrefab: {fileID: 488477006654356858, guid: 6fbf94ad5816ef8468ebdfe8fdadf94f, type: 3}
   neutralBuildingPrefab: {fileID: 9029771638969087183, guid: 20b438619b1f5994f9aa5edd375055b9, type: 3}
   resourceSpawnerPrefab: {fileID: 605915402215295252, guid: b23b08c4e9dc68c4fa46d72181b0a759, type: 3}
-  holyResourcePrefab: {fileID: 1878007639172080338, guid: f78543141ace1d24a9071656139a2ee3, type: 3}

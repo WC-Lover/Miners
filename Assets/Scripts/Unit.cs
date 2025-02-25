@@ -19,6 +19,7 @@ public class Unit : NetworkBehaviour
     [SerializeField] private UnitState currentState;
     [SerializeField] public float stamina;
     [SerializeField] private float carryingWeight;
+    [SerializeField] private float holyResourceWeight;
     [SerializeField] private float carryingWeightReturned;
 
     public NetworkVariable<float> health = new NetworkVariable<float>();
@@ -94,15 +95,14 @@ public class Unit : NetworkBehaviour
     }
 
     [Rpc(SendTo.Owner)]
-    public void InitializeOwnerRpc(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, int minerIndex)
+    public void InitializeOwnerRpc(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, int minerIndex, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus)
     {
         if (!IsOwner) return;
 
         rb = GetComponent<Rigidbody>();
 
-        InitializeStats(buildingLevel, basePosition, spawnDirection);
+        InitializeStats(buildingLevel, basePosition, spawnDirection, tempBonus, permBonus);
         SetUnitUIMaxStats();
-        InitializeMaterials();
         TransitionState(UnitState.ApproachingSpawnPosition);
         currentTarget = new InteractionTarget { Position = spawnDirection, RangeOfInteraction = 0.14f }; // range is unit width / 2 + 0.015f
 
@@ -110,14 +110,19 @@ public class Unit : NetworkBehaviour
         this.basePosition = basePosition;
     }
 
-    private void InitializeStats(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection)
+    public override void OnNetworkSpawn()
+    {
+        InitializeMaterials();
+    }
+
+    private void InitializeStats(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus)
     {
         stats = new UnitStats
         {
-            Speed = buildingLevel * 0.1f + 0.4f,
-            GatherPower = buildingLevel * 0.5f + 1,
-            AttackDamage = buildingLevel * 0.2f + 1,
-            StaminaMax = (buildingLevel / 5) + 3,
+            Speed = buildingLevel * 0.1f + 0.4f + (tempBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0) + (permBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0),
+            GatherPower = buildingLevel * 0.5f + 1 + (tempBonus == BonusSelectUI.Bonus.Gather ? 0.25f : 0) + (permBonus == BonusSelectUI.Bonus.Gather ? 0.25f : 0),
+            AttackDamage = buildingLevel * 0.2f + 1 + (tempBonus == BonusSelectUI.Bonus.Damage ? 0.25f : 0) + (permBonus == BonusSelectUI.Bonus.Damage ? 0.25f : 0),
+            StaminaMax = (buildingLevel / 5) + 4 + (tempBonus == BonusSelectUI.Bonus.Damage ? 1f : 0) + (permBonus == BonusSelectUI.Bonus.Damage ? 1f : 0),
             CarryCapacity = (buildingLevel / 5) + 2,
             InteractionCooldown = buildingLevel > 0 ? buildingLevel * 0.95f * 2 : 2
         };
@@ -245,7 +250,8 @@ public class Unit : NetworkBehaviour
     {
         if (currentTarget != null && currentTarget.Building != null && currentTarget.Building.IsOwner)
         {
-            currentTarget.Building.BuildingGainXP(carryingWeight * Time.fixedDeltaTime);
+            currentTarget.Building.BuildingGainXP(carryingWeight * Time.fixedDeltaTime, holyResourceWeight);
+            if (holyResourceWeight > 0) holyResourceWeight = 0;
             carryingWeight = Mathf.Max(carryingWeight - Time.fixedDeltaTime, 0);
             stamina = Mathf.Min(stamina + Time.fixedDeltaTime, stats.StaminaMax);
             OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
@@ -312,7 +318,7 @@ public class Unit : NetworkBehaviour
         }
 
         Quaternion targetRotation = Quaternion.LookRotation(direction);
-        rb.rotation = targetRotation;
+        rb.MoveRotation(targetRotation);
         //rb.rotation = Quaternion.Slerp(rb.rotation, targetRotation,
         //    movementSettings.RotationSpeed * speedBoost * Time.fixedDeltaTime);
     }
@@ -504,6 +510,14 @@ public class Unit : NetworkBehaviour
         if (currentTarget.Building != null) canInteract &= currentTarget.Building.isNeutralBuilding 
                 && (currentTarget.Building.occupationStatus == Building.Occupation.Empty || !currentTarget.Building.IsOwner);
         if (currentTarget.Resource != null) canInteract &= currentTarget.Resource.weight.Value > 0;
+        //try
+        //{
+        //    canInteract &= Vector3.Distance(transform.position, currentTarget.Position) <= currentTarget.RangeOfInteraction;
+        //}
+        //catch (Exception ex)
+        //{
+        //    Debug.Log("target doesn't have range of interaction or possition");
+        //}
         return canInteract;
     }
 
@@ -526,8 +540,10 @@ public class Unit : NetworkBehaviour
         }
         else if (currentTarget.Resource != null)
         {
-            carryingWeight += stats.GatherPower * Time.fixedDeltaTime;
-            currentTarget.Resource.InteractWithResourceServerRpc(stats.GatherPower * Time.fixedDeltaTime);
+            float gatheredAtOnce = stats.GatherPower * Time.fixedDeltaTime;
+            carryingWeight += gatheredAtOnce;
+            if (currentTarget.Resource.IsHolyResource()) holyResourceWeight += gatheredAtOnce;
+            currentTarget.Resource.InteractWithResourceServerRpc(gatheredAtOnce);
         }
         OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
     }
@@ -588,6 +604,16 @@ public class Unit : NetworkBehaviour
             {
                 currentTarget = new InteractionTarget { Building = building };
                 TransitionState(UnitState.Restoring);
+            }
+        }
+
+        if (currentState == UnitState.ApproachingTarget && collision.collider != null)
+        { 
+            Resource holyResource = collision.collider.GetComponentInParent<Resource>();
+            if (holyResource != null && holyResource.IsHolyResource() && holyResource.weight.Value > 0)
+            {
+                currentTarget = new InteractionTarget { Position = holyResource.transform.position, Resource = holyResource, RangeOfInteraction = holyResource.rangeOfInteraction };
+                TransitionState(UnitState.Interacting);
             }
         }
     }

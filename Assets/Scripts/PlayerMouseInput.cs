@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class PlayerMouseInput : MonoBehaviour
@@ -6,6 +7,7 @@ public class PlayerMouseInput : MonoBehaviour
     public static PlayerMouseInput Instance;
     private Camera mainCamera;
     public Vector3 lastWorldPosition;
+    private bool gameHasStarted = false;
 
     private void Awake()
     {
@@ -19,9 +21,14 @@ public class PlayerMouseInput : MonoBehaviour
         mainCamera = Camera.main;
     }
 
+    public void GameHasStarted()
+    {
+        gameHasStarted = true;
+    }
+
     private void Update()
     {
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) && gameHasStarted)
         {
             // Get mouse position in screen coordinates
             Vector3 mousePos = Input.mousePosition;

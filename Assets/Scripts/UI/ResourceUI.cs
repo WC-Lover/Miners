@@ -17,7 +17,7 @@ public class ResourceUI : MonoBehaviour
     }
     private void Resource_OnWeightChanged(float oldValue, float newValue)
     {
-        if (!gameObject.activeSelf) Show();
+        if (!gameObject.activeSelf && newValue != resourceMaxWeight) Show();
 
         weightSlider.value = newValue / resourceMaxWeight;
 
