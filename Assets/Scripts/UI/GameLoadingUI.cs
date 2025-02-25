@@ -11,9 +11,13 @@ public class GameLoadingUI : MonoBehaviour
     private int dots = 0;
     private StringBuilder sb = new StringBuilder();
 
-    void Start()
+    private void Awake()
     {
         GameManager.Instance.OnGameReady += GameConnectionManager_OnGameReady;
+    }
+
+    void Start()
+    {
         StartCoroutine(AnimateLoadingText());
     }
 

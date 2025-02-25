@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,7 +11,7 @@ public class BonusSelectUI : MonoBehaviour
     [SerializeField] private Building building;
 
     [SerializeField] private TextMeshProUGUI timerText;
-    [SerializeField] private float timeLeft = 10;
+    [SerializeField] private float timeLeft = 0.5f;
 
     [Header("Temporary bonus")]
     private bool tempBonusChosen = false;
@@ -26,8 +27,8 @@ public class BonusSelectUI : MonoBehaviour
     [SerializeField] private Button gatherPermBonusButton;
     [SerializeField] private Button staminaPermBonusButton;
 
-    private Bonus tempBonus;
-    private Bonus permBonus;
+    private Bonus tempBonus = Bonus.Speed;
+    private Bonus permBonus = Bonus.Speed;
 
     public enum Bonus
     {
@@ -131,6 +132,8 @@ public class BonusSelectUI : MonoBehaviour
             GameManager.Instance.bonusSelectTimer.OnValueChanged -= GameConnectionManager_OnBonusSelectTimerChanged;
 
             PlayerMouseInput.Instance.GameHasStarted();
+
+            if (GameManager.Instance.IsServer) ResourceSpawner.Instance.GameHasStarted();
 
             gameObject.SetActive(false);
         }

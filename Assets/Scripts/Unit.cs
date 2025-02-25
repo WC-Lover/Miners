@@ -1,9 +1,6 @@
 using System;
-using Mono.Cecil;
 using Unity.Netcode;
-using Unity.VisualScripting;
 using UnityEngine;
-using static UnityEngine.GraphicsBuffer;
 
 public class Unit : NetworkBehaviour
 {
@@ -542,7 +539,11 @@ public class Unit : NetworkBehaviour
         {
             float gatheredAtOnce = stats.GatherPower * Time.fixedDeltaTime;
             carryingWeight += gatheredAtOnce;
-            if (currentTarget.Resource.IsHolyResource()) holyResourceWeight += gatheredAtOnce;
+            if (currentTarget.Resource.IsHolyResource())
+            {
+                holyResourceWeight += gatheredAtOnce;
+                GameManager.Instance.UpdatePlayerHolyResourceDataServerRpc(gatheredAtOnce);
+            }
             currentTarget.Resource.InteractWithResourceServerRpc(gatheredAtOnce);
         }
         OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
@@ -581,6 +582,7 @@ public class Unit : NetworkBehaviour
 
     private void DespawnUnit()
     {
+        //if (holyResourceWeight > 0)  
         NotifyClientsUnitDespawnEverybodyRpc();
         serverOwnerBuilding.ResetUnit(minerIndex);
         NetworkObject.Despawn(false);

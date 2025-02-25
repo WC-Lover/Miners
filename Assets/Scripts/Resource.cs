@@ -58,7 +58,7 @@ public class Resource : NetworkBehaviour
 
         if (resourceData.type == ResourceType.Holy)
         {
-            //GameManager.Instance.GameHasFinished();
+            GameManager.Instance.GameHasFinished();
         }
         else
         {

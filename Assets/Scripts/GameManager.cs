@@ -12,8 +12,9 @@ public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance;
 
-    public NetworkVariable<float> bonusSelectTimer = new NetworkVariable<float>(10);
-    //private NetworkVariable<Dictionary<string, float>> playerHolyResourceGatheredDict = new NetworkVariable<Dictionary<string, float>>();
+    public NetworkVariable<float> bonusSelectTimer = new NetworkVariable<float>(0.5f);
+    // Safety reasons instead of public craete event
+    private NetworkList<PlayerHolyResourceData> playerHolyResourceDataNetworkList;
     private Dictionary<ulong, Building> playerBuildingsDict;
 
     [SerializeField] private GameObject playerBuildingPrefab;
@@ -30,13 +31,34 @@ public class GameManager : NetworkBehaviour
     public EventHandler<OnGameFinishedEventArgs> OnGameFinished;
     public class OnGameFinishedEventArgs: EventArgs
     {
-        public Dictionary<string, float> playersHolyResourceGatheredDict;
+        public List<PlayerHolyResourceData> playerHolyResourceDataList;
     }
     public EventHandler OnGameReady;
+    public EventHandler<OnPlayerHolyResourceDataListChangedArgs> OnPlayerHolyResourceDataListChanged;
+    public class OnPlayerHolyResourceDataListChangedArgs : EventArgs
+    {
+        public List<PlayerHolyResourceData> playerHolyResourceDataList;
+    }
 
     private void Awake()
     {
         Instance = this;
+        playerHolyResourceDataNetworkList = new NetworkList<PlayerHolyResourceData>();
+        playerHolyResourceDataNetworkList.OnListChanged += PlayerHolyResourceDataList_OnListChanged;
+    }
+
+    private void PlayerHolyResourceDataList_OnListChanged(NetworkListEvent<PlayerHolyResourceData> changeEvent)
+    {
+        List<PlayerHolyResourceData> playerHolyResourceDataList = new List<PlayerHolyResourceData>();
+        for (int i = 0; i < playerHolyResourceDataNetworkList.Count; i++)
+        {
+            playerHolyResourceDataList.Add(playerHolyResourceDataNetworkList[i]);
+        }
+
+        OnPlayerHolyResourceDataListChanged?.Invoke(this, new OnPlayerHolyResourceDataListChangedArgs
+        {
+            playerHolyResourceDataList = playerHolyResourceDataList
+        });
     }
 
     public override void OnNetworkSpawn()
@@ -50,7 +72,6 @@ public class GameManager : NetworkBehaviour
         };
 
         if (!IsServer) return;
-        //playerHolyResourceGatheredDict.Value = new Dictionary<string, float>();
         playerBuildingsDict = new Dictionary<ulong, Building>();
 
         counter = 0;
@@ -84,6 +105,7 @@ public class GameManager : NetworkBehaviour
             if (IsServer)
             {
                 AttachNeutralBuildingsOnGameStart();
+                FillPlayerHolyResourceDataNetworkList();
                 CreateBuildingForConnectedPlayerServerRpc();
                 SpawnResourceSpawner();
             }
@@ -91,6 +113,19 @@ public class GameManager : NetworkBehaviour
             {
                 CreateBuildingForConnectedPlayerServerRpc();
             }
+        }
+    }
+
+    private void FillPlayerHolyResourceDataNetworkList()
+    {
+        foreach (PlayerData playerData in GameMultiplayerManager.Instance.GetPlayerDataNetworkList())
+        {
+            playerHolyResourceDataNetworkList.Add(new PlayerHolyResourceData
+            {
+                clientId = playerData.clientId,
+                playerName = playerData.playerName,
+                holyResourceGathered = 0
+            });
         }
     }
 
@@ -154,9 +189,10 @@ public class GameManager : NetworkBehaviour
 
     IEnumerator GameStartDelay()
     {
+        yield return new WaitForSeconds(1.5f);
         while (OnGameReady == null)
         {
-            yield return new WaitForSeconds(2f);
+            yield return new WaitForSeconds(1f);
         }
 
         GameReadyEveryoneRpc();
@@ -180,36 +216,40 @@ public class GameManager : NetworkBehaviour
     //    bonusSelectTimer.OnValueChanged = null;
     //}
 
-    //public void GameHasFinished()
-    //{
-    //    for (int i = 0;i < playerBuildingsDict.Keys.Count; i++)
-    //    {
-    //        playerBuildingsDict[playerBuildingsDict.Keys.ToArray()[i]].CollectHolyResourceDataOwnerRpc();
-    //    }
-    //}
+    public void GameHasFinished()
+    {
+        GameHasFinishedEveryoneRpc();
+    }
 
-    //[ServerRpc(RequireOwnership = false)]
-    //public void SendHolyResourceDataServerRpc(float holyResourceGathered, ServerRpcParams serverRpcParams = default)
-    //{
-    //    foreach (PlayerData player in GameMultiplayerManager.Instance.GetPlayerDataNetworkList())
-    //    {
-    //        if (player.clientId == serverRpcParams.Receive.SenderClientId)
-    //        {
-    //            Debug.Log($"");
-    //            playerHolyResourceGatheredDict[player.playerName.ToString()] = holyResourceGathered;
-    //        }
-    //    }
+    [Rpc(SendTo.Everyone)]
+    private void GameHasFinishedEveryoneRpc()
+    {
+        List<PlayerHolyResourceData> playerHolyResourceDataList = new List<PlayerHolyResourceData>();
 
-    //    if (playerHolyResourceGatheredDict.Keys.Count == GameMultiplayerManager.Instance.GetPlayerDataNetworkList().Count)
-    //    {
-    //        ShowResultsEveryoneRpc(playerHolyResourceGatheredDict);
-    //    }
-    //}
+        foreach (PlayerHolyResourceData phrd in playerHolyResourceDataNetworkList)
+        {
+            playerHolyResourceDataList.Add(phrd);
+        }
 
-    //private void ShowResultsEveryoneRpc(Dictionary<string, float> playerHolyResourceGatheredDict)
-    //{
-    //    OnGameFinished?.Invoke(this, new OnGameFinishedEventArgs { playersHolyResourceGatheredDict = playerHolyResourceGatheredDict });
-    //}
+        Debug.Log("GameHasFinished");
+        OnGameFinished?.Invoke(this, new OnGameFinishedEventArgs { playerHolyResourceDataList = playerHolyResourceDataList });
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void UpdatePlayerHolyResourceDataServerRpc(float holyResourceGathered, ServerRpcParams serverRpcParams = default)
+    {
+        for (int i = 0; i < playerHolyResourceDataNetworkList.Count; i++)
+        {
+            PlayerHolyResourceData playerHolyResourceData = playerHolyResourceDataNetworkList[i];
+            if (playerHolyResourceData.clientId == serverRpcParams.Receive.SenderClientId)
+            {
+                playerHolyResourceData.holyResourceGathered += holyResourceGathered;
+                playerHolyResourceDataNetworkList[i] = playerHolyResourceData;
+                break;
+            }
+        }
+    }
+
     [Rpc(SendTo.Everyone)]
     private void GameReadyEveryoneRpc()
     {

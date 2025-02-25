@@ -79,6 +79,8 @@ public class Building : NetworkBehaviour
     {
         this.isNeutralBuilding = isNeutralBuilding;
 
+        if (isNeutralBuilding) GameManager.Instance.OnGameReady -= GameManager_OnGameReady;
+
         occupationStatus = isNeutralBuilding ? Occupation.Empty : Occupation.Occupied;
 
         if (isNeutralBuilding)
@@ -114,11 +116,6 @@ public class Building : NetworkBehaviour
         }
     }
 
-    private void Awake()
-    {
-        if (IsOwner) GameManager.Instance.OnGameReady += GameManager_OnGameReady;
-    }
-
     private void GameManager_OnGameReady(object sender, EventArgs e)
     {
         if (!isNeutralBuilding)
@@ -130,6 +127,7 @@ public class Building : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        if (IsOwner) GameManager.Instance.OnGameReady += GameManager_OnGameReady;
         buildingXP = 0;
         buildingXPMax = 50;
         unitSpawnTimeMax = 12;

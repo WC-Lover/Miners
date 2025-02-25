@@ -15,6 +15,7 @@ public class ResourceSpawner : MonoBehaviour
     [SerializeField] private float resourceSpawnTime;
     [SerializeField] private float resourceSpawnTimeMax;
     private bool allOccupied = false;
+    private bool gameHasStarted = false;
 
     // COMMON/RARE RESOURCE ZONE BETWEEN PLAYERS LISTS
     private List<Transform> disabledCommonResourceTransformListZoneBetween;
@@ -157,7 +158,7 @@ public class ResourceSpawner : MonoBehaviour
 
     private void Update()
     {
-        if (allOccupied) return;
+        if (allOccupied || !gameHasStarted) return;
 
         if (resourceSpawnTime > 0)
         {
@@ -218,5 +219,10 @@ public class ResourceSpawner : MonoBehaviour
         indexToAvailableZoneListDictionary[occupiedZoneIndex].Add(occupiedIndex);
 
         allOccupied = false;
+    }
+
+    public void GameHasStarted()
+    {
+        gameHasStarted = true;
     }
 }

@@ -32,24 +32,24 @@ public class EndGameUI : MonoBehaviour
     {
         gameObject.SetActive(true);
         var counter = 1;
-        foreach (var keyValue in e.playersHolyResourceGatheredDict.OrderByDescending(keyValue => keyValue.Value))
+        foreach (var phrd in e.playerHolyResourceDataList.OrderByDescending(phrd => phrd.holyResourceGathered))
         {
             if (counter > 3) return;
 
             if (counter == 1)
             {
-                firstPlaceName.text = keyValue.Key;
-                firstPlacePercentageText.text = Mathf.RoundToInt(keyValue.Value / 200f) + "%";
+                firstPlaceName.text = phrd.playerName.ToString();
+                firstPlacePercentageText.text = Mathf.RoundToInt(phrd.holyResourceGathered / 200f) + "%";
             }
             if (counter == 2)
             {
-                secondPlaceName.text = keyValue.Key;
-                secondPlacePercentageText.text = Mathf.RoundToInt(keyValue.Value / 200f) + "%";
+                secondPlaceName.text = phrd.playerName.ToString();
+                secondPlacePercentageText.text = Mathf.RoundToInt(phrd.holyResourceGathered / 200f) + "%";
             }
             if (counter == 3)
             {
-                thirdPlaceName.text = keyValue.Key;
-                thirdPlacePercentageText.text = Mathf.RoundToInt(keyValue.Value / 200f) + "%";
+                thirdPlaceName.text = phrd.playerName.ToString();
+                thirdPlacePercentageText.text = Mathf.RoundToInt(phrd.holyResourceGathered / 200f) + "%";
             }
             counter++;
         }
