@@ -12,7 +12,7 @@ public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance;
 
-    public NetworkVariable<float> bonusSelectTimer = new NetworkVariable<float>(0.5f);
+    public NetworkVariable<float> bonusSelectTimer = new NetworkVariable<float>();
     // Safety reasons instead of public craete event
     private NetworkList<PlayerHolyResourceData> playerHolyResourceDataNetworkList;
     private Dictionary<ulong, Building> playerBuildingsDict;
@@ -105,7 +105,6 @@ public class GameManager : NetworkBehaviour
             if (IsServer)
             {
                 AttachNeutralBuildingsOnGameStart();
-                FillPlayerHolyResourceDataNetworkList();
                 CreateBuildingForConnectedPlayerServerRpc();
                 SpawnResourceSpawner();
             }
@@ -183,6 +182,7 @@ public class GameManager : NetworkBehaviour
         if (counter == NetworkManager.Singleton.ConnectedClients.Count)
         {
             // GameLoadingUI needs time to subscribe.
+            FillPlayerHolyResourceDataNetworkList();
             StartCoroutine(GameStartDelay());
         }
     }
@@ -205,17 +205,6 @@ public class GameManager : NetworkBehaviour
         Camera.main.transform.Rotate(50, 90 * index, 0);
     }
 
-    //[ServerRpc(RequireOwnership = false)]
-    //public void GameReadyToStartServerRpc(BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus, ServerRpcParams serverRpcParams = default)
-    //{
-    //    for (int i = 0; i < playerBuildingsDict.Count; i++)
-    //    {
-    //        Debug.Log($"clientId -> {playerBuildingsDict.Keys.ToArray()[i]} | has building -> {playerBuildingsDict[playerBuildingsDict.Keys.ToArray()[i]] != null}");
-    //    }
-    //    playerBuildingsDict[serverRpcParams.Receive.SenderClientId].ApplyBonusesOwnerRpc(tempBonus, permBonus);
-    //    bonusSelectTimer.OnValueChanged = null;
-    //}
-
     public void GameHasFinished()
     {
         GameHasFinishedEveryoneRpc();
@@ -231,8 +220,18 @@ public class GameManager : NetworkBehaviour
             playerHolyResourceDataList.Add(phrd);
         }
 
-        Debug.Log("GameHasFinished");
         OnGameFinished?.Invoke(this, new OnGameFinishedEventArgs { playerHolyResourceDataList = playerHolyResourceDataList });
+
+        Time.timeScale = 0f;
+
+        CleanSubscriptions();
+    }
+
+    private void CleanSubscriptions()
+    {
+        OnGameReady = null;
+        OnPlayerHolyResourceDataListChanged = null;
+        OnGameFinished = null;
     }
 
     [ServerRpc(RequireOwnership = false)]

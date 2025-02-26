@@ -36,6 +36,13 @@ public class Unit : NetworkBehaviour
     {
         public float stamina;
     }
+    public event EventHandler OnUnloadedResources;
+    public event EventHandler<OnResourceGatheredEventArgs> OnResourceGathered;
+    public class OnResourceGatheredEventArgs : EventArgs
+    {
+        public bool holyResource;
+    }
+    public event EventHandler OnUnitDied; // Use with custom args to give killer Unit resources of killed Unit
 
     private enum UnitState
     {
@@ -84,11 +91,9 @@ public class Unit : NetworkBehaviour
 
     public void SetOwnerBuildingForServer(Building ownerBuilding) => serverOwnerBuilding = ownerBuilding;
     public void SetHealthForUnit(int buildingLevel) => health.Value = buildingLevel + 3;
-    public void SetUnitUIMaxStats()
+    public void SetUnitUI()
     {
-        var unitUI = GetComponentInChildren<UnitUI>();
-        unitUI.unitMaxHealth = health.Value;
-        unitUI.unitMaxStamina = stats.StaminaMax;
+        GetComponentInChildren<UnitUI>().SetUp(health.Value, stats.StaminaMax);
     }
 
     [Rpc(SendTo.Owner)]
@@ -98,8 +103,8 @@ public class Unit : NetworkBehaviour
 
         rb = GetComponent<Rigidbody>();
 
+        SetUnitUI();
         InitializeStats(buildingLevel, basePosition, spawnDirection, tempBonus, permBonus);
-        SetUnitUIMaxStats();
         TransitionState(UnitState.ApproachingSpawnPosition);
         currentTarget = new InteractionTarget { Position = spawnDirection, RangeOfInteraction = 0.14f }; // range is unit width / 2 + 0.015f
 
@@ -248,14 +253,18 @@ public class Unit : NetworkBehaviour
         if (currentTarget != null && currentTarget.Building != null && currentTarget.Building.IsOwner)
         {
             currentTarget.Building.BuildingGainXP(carryingWeight * Time.fixedDeltaTime, holyResourceWeight);
+
             if (holyResourceWeight > 0) holyResourceWeight = 0;
+
             carryingWeight = Mathf.Max(carryingWeight - Time.fixedDeltaTime, 0);
             stamina = Mathf.Min(stamina + Time.fixedDeltaTime, stats.StaminaMax);
+
             OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
         }
         if (stamina >= stats.StaminaMax && carryingWeight <= 0)
         {
             currentTarget = null;
+            OnUnloadedResources?.Invoke(this, EventArgs.Empty);
             TransitionState(UnitState.SearchingForInteraction);
         }
     }
@@ -543,6 +552,16 @@ public class Unit : NetworkBehaviour
             {
                 holyResourceWeight += gatheredAtOnce;
                 GameManager.Instance.UpdatePlayerHolyResourceDataServerRpc(gatheredAtOnce);
+                OnResourceGathered?.Invoke(this, new OnResourceGatheredEventArgs {
+                    holyResource = true
+                });
+            }
+            else
+            {
+                OnResourceGathered?.Invoke(this, new OnResourceGatheredEventArgs
+                {
+                    holyResource = false
+                });
             }
             currentTarget.Resource.InteractWithResourceServerRpc(gatheredAtOnce);
         }

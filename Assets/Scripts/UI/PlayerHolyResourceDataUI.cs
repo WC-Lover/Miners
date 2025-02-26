@@ -12,6 +12,6 @@ public class PlayerHolyResourceDataUI : MonoBehaviour
     public void SetPlayerHolyResourceData(PlayerHolyResourceData phrd)
     {
         playerName.text = phrd.playerName.ToString();
-        holyResourceGatheredText.text = Mathf.Ceil(phrd.holyResourceGathered / holyResourceWeight).ToString();
+        holyResourceGatheredText.text = Mathf.Ceil(phrd.holyResourceGathered / holyResourceWeight).ToString() + "%";
     }
 }

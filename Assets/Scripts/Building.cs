@@ -67,6 +67,16 @@ public class Building : NetworkBehaviour
         Empty
     }
 
+    private void Awake()
+    {
+        GameManager.Instance.OnGameFinished += GameManager_OnGameFinished;
+    }
+
+    private void GameManager_OnGameFinished(object sender, GameManager.OnGameFinishedEventArgs e)
+    {
+        gameObject.SetActive(false);
+    }
+
     [Rpc(SendTo.Owner)]
     public void SetBasePositionOwnerRpc(Vector3 baseOfOriginPosition, bool isNeutralBuilding)
     {

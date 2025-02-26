@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -7,15 +8,31 @@ public class GameUI : MonoBehaviour
 {
     [SerializeField] private Transform playerHolyResourceDataTemplate;
     [SerializeField] private Transform playersHolyResourceDataContainer;
+    private float lastUpdate;
+    private float updateDelay = 0.5f;
 
-    void Start()
+    void Awake()
     {
+        GameManager.Instance.OnGameFinished += GameManager_OnGameFinished;
         GameManager.Instance.OnPlayerHolyResourceDataListChanged += GameManager_OnPlayerHolyResourceDataListChanged;
+
+        lastUpdate = Time.time;
+    }
+
+    private void GameManager_OnGameFinished(object sender, GameManager.OnGameFinishedEventArgs e)
+    {
+        GameManager.Instance.OnGameFinished -= GameManager_OnGameFinished;
+        GameManager.Instance.OnPlayerHolyResourceDataListChanged -= GameManager_OnPlayerHolyResourceDataListChanged;
+
+        gameObject.SetActive(false);
     }
 
     private void GameManager_OnPlayerHolyResourceDataListChanged(object sender, GameManager.OnPlayerHolyResourceDataListChangedArgs e)
     {
+        if (Time.time - lastUpdate < updateDelay) return;
+        
         UpdatePlayersHolyResourceDataList(e.playerHolyResourceDataList);
+        lastUpdate = Time.time;
     }
 
     private void UpdatePlayersHolyResourceDataList(List<PlayerHolyResourceData> playerHolyResourceDataList)

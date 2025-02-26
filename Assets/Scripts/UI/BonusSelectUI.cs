@@ -11,7 +11,6 @@ public class BonusSelectUI : MonoBehaviour
     [SerializeField] private Building building;
 
     [SerializeField] private TextMeshProUGUI timerText;
-    [SerializeField] private float timeLeft = 0.5f;
 
     [Header("Temporary bonus")]
     private bool tempBonusChosen = false;
@@ -125,11 +124,12 @@ public class BonusSelectUI : MonoBehaviour
         timerText.text = $"Time Left: {Mathf.Ceil(newValue)}";
         if (Mathf.Ceil(newValue) <= 0)
         {
+            GameManager.Instance.bonusSelectTimer.OnValueChanged -= GameConnectionManager_OnBonusSelectTimerChanged;
+
             // SET BONUS
             building.SetBonusAttributes(tempBonus, permBonus);
             // ALLOW UNITS SPAWN
             building.AllowUnitSpawn();
-            GameManager.Instance.bonusSelectTimer.OnValueChanged -= GameConnectionManager_OnBonusSelectTimerChanged;
 
             PlayerMouseInput.Instance.GameHasStarted();
 
@@ -141,11 +141,9 @@ public class BonusSelectUI : MonoBehaviour
 
     private void Update()
     {
-        if (GameManager.Instance.IsServer && timeLeft > 0)
+        if (GameManager.Instance.IsServer && GameManager.Instance.bonusSelectTimer.Value > 0)
         {
-            timeLeft -= Time.deltaTime;
-
-            GameManager.Instance.bonusSelectTimer.Value = timeLeft;
+            GameManager.Instance.bonusSelectTimer.Value -= Time.deltaTime;
         }
     }
 }
