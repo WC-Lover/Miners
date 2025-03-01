@@ -1,34 +1,49 @@
 using System;
 using System.Globalization;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.UI;
+using static Unit;
 
 public class UnitUI : MonoBehaviour
 {
-    [Header("References")]
+    [Header("Stats Sliders References")]
+    [SerializeField] private Transform statsSliders;
     [SerializeField] private Slider healthSlider;
     [SerializeField] private Slider staminaSlider;
+    
+    [Header("Resource Indicator References")]
     [SerializeField] private Transform holyResourceIcon;
     [SerializeField] private Transform anyResourceIcon;
     [SerializeField] private Transform resourceIndicator;
+    
+    [Space]
     [SerializeField] private Unit unit;
-    private float unitMaxHealth;
-    private float unitMaxStamina;
+
     private bool subscribedToUnload = false;
 
-    private void Unit_OnUnloadedResources(object sender, System.EventArgs e)
+    private void Awake()
     {
-        // Unsubscribe until any resource gathered
-        unit.OnUnloadedResources -= Unit_OnUnloadedResources;
-        subscribedToUnload = false;
-
-        resourceIndicator.gameObject.SetActive(false);
-        holyResourceIcon.gameObject.SetActive(false);
-        anyResourceIcon.gameObject.SetActive(false);
+        // Show resource gathered indicatior on all clients
         unit.OnResourceGathered += Unit_OnResourceGathered;
     }
 
-    private void Unit_OnResourceGathered(object sender, Unit.OnResourceGatheredEventArgs e)
+    public void SetUp()
+    {
+        // Show Stamina/Health only for local player
+        statsSliders.gameObject.SetActive(true);
+        healthSlider.gameObject.SetActive(true);
+        staminaSlider.gameObject.SetActive(true);
+
+        healthSlider.value = 1;
+        staminaSlider.value = 1;
+
+        unit.OnHealthChanged += Unit_OnHealthChanged;
+        unit.OnStaminaChanged += Unit_OnStaminaChanged;
+        unit.OnUnitDespawn += Unit_OnUnitDespawn;
+    }
+
+    private void Unit_OnResourceGathered(bool isHolyResource)
     {
         // If already has any icon, don't enable its' background again
         if (!resourceIndicator.gameObject.activeSelf) resourceIndicator.gameObject.SetActive(true);
@@ -39,7 +54,7 @@ public class UnitUI : MonoBehaviour
             unit.OnUnloadedResources += Unit_OnUnloadedResources;
         }
 
-        if (e.holyResource)
+        if (isHolyResource)
         {
             holyResourceIcon.gameObject.SetActive(true);
             // In case Unit used to show non-holy resource Icon
@@ -56,43 +71,35 @@ public class UnitUI : MonoBehaviour
         }
     }
 
-    private void Unit_OnStaminaChanged(object sender, Unit.OnStaminaChangedEventArgs e)
+    private void Unit_OnUnloadedResources()
     {
-        staminaSlider.value = e.stamina / unitMaxStamina;
+        // Unsubscribe until any resource gathered
+        unit.OnUnloadedResources -= Unit_OnUnloadedResources;
+        subscribedToUnload = false;
+
+        resourceIndicator.gameObject.SetActive(false);
+        holyResourceIcon.gameObject.SetActive(false);
+        anyResourceIcon.gameObject.SetActive(false);
+        unit.OnResourceGathered += Unit_OnResourceGathered;
     }
 
-    private void Unit_OnHealthChanged(float oldValue, float newValue)
-    {
-        healthSlider.value = newValue / unitMaxHealth;
-    }
-
-    private void Unit_OnUnitDespawn(object sender, EventArgs e)
+    private void Unit_OnUnitDespawn()
     {
         // Unsubscribe from all events
-        unit.health.OnValueChanged -= Unit_OnHealthChanged;
-        unit.OnStaminaChanged -= Unit_OnStaminaChanged;
         unit.OnResourceGathered -= Unit_OnResourceGathered;
-        unit.OnUnitDespawn -= Unit_OnUnitDespawn;
+        unit.OnHealthChanged -= Unit_OnHealthChanged;
+        unit.OnStaminaChanged -= Unit_OnStaminaChanged;
         unit.OnUnloadedResources -= Unit_OnUnloadedResources;
+        unit.OnUnitDespawn -= Unit_OnUnitDespawn;
     }
 
-    public void SetUp(float health, float staminaMax)
+    private void Unit_OnStaminaChanged(float stamina, float staminaMax)
     {
-        if (!unit.IsOwner)
-        {
-            gameObject.SetActive(false);
-            return;
-        }
+        staminaSlider.value = stamina / staminaMax;
+    }
 
-        unitMaxHealth = health;
-        unitMaxStamina = staminaMax;
-
-        healthSlider.value = 1;
-        staminaSlider.value = 1;
-
-        unit.health.OnValueChanged += Unit_OnHealthChanged;
-        unit.OnStaminaChanged += Unit_OnStaminaChanged;
-        unit.OnResourceGathered += Unit_OnResourceGathered;
-        unit.OnUnitDespawn += Unit_OnUnitDespawn;
+    private void Unit_OnHealthChanged(float health, float healthMax)
+    {
+        healthSlider.value = health / healthMax;
     }
 }

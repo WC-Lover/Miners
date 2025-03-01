@@ -10,7 +10,7 @@ public class ParticleSystemController : MonoBehaviour
         GetComponentInParent<Resource>().OnResourceInteraction += Resource_OnResourceInteraction;
     }
 
-    private void Resource_OnResourceInteraction(object sender, EventArgs e)
+    private void Resource_OnResourceInteraction()
     {
         if (!particles.isPlaying) particles.Play();
     }

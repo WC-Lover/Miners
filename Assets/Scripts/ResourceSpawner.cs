@@ -8,9 +8,11 @@ public class ResourceSpawner : MonoBehaviour
 {
     public static ResourceSpawner Instance;
 
-    [SerializeField] private Transform commonResourcePrefab;
-    [SerializeField] private Transform rareResourcePrefab;
+    [SerializeField] private Resource commonResourcePrefab;
+    [SerializeField] private Resource rareResourcePrefab;
     [SerializeField] private Transform holyResourcePrefab;
+
+    [SerializeField] private ResourcePool resourcePool;
 
     [SerializeField] private float resourceSpawnTime;
     [SerializeField] private float resourceSpawnTimeMax;
@@ -18,27 +20,13 @@ public class ResourceSpawner : MonoBehaviour
     private bool gameHasStarted = false;
 
     // COMMON/RARE RESOURCE ZONE BETWEEN PLAYERS LISTS
-    private List<Transform> disabledCommonResourceTransformListZoneBetween;
-    private List<Transform> disabledRareResourceTransformListZoneBetween;
+    private List<Vector3> resourcePositionListZoneBetween;
     // PLAYERS' COMMON RESOURCE ZONE 1-4 LISTS
-    private List<Transform> disabledCommonResourceTransformListZoneOne;
-    private List<Transform> disabledCommonResourceTransformListZoneTwo;
-    private List<Transform> disabledCommonResourceTransformListZoneThree;
-    private List<Transform> disabledCommonResourceTransformListZoneFour;
-    // PLAYERS' RARE RESOURCE ZONE 1-4 LISTS
-    private List<Transform> disabledRareResourceTransformListZoneOne;
-    private List<Transform> disabledRareResourceTransformListZoneTwo;
-    private List<Transform> disabledRareResourceTransformListZoneThree;
-    private List<Transform> disabledRareResourceTransformListZoneFour;
-    // AVAILABLE ZONES INDEXES
-    private List<int> availableDisabledResourcesIndexesZoneOne;
-    private List<int> availableDisabledResourcesIndexesZoneTwo;
-    private List<int> availableDisabledResourcesIndexesZoneThree;
-    private List<int> availableDisabledResourcesIndexesZoneFour;
-    private List<int> availableDisabledResourcesIndexesZoneBetween;
-    // DICTIONARY KEY: INDEX | VALUE: LIST<TRANSFORM>
-    private Dictionary<int, List<Transform>> indexToZoneListDictionary;
-    private Dictionary<int, List<int>> indexToAvailableZoneListDictionary;
+    private List<Vector3> resourcePositionListZoneOne;
+    private List<Vector3> resourcePositionListZoneTwo;
+    private List<Vector3> resourcePositionListZoneThree;
+    private List<Vector3> resourcePositionListZoneFour;
+
 
     private void Awake()
     {
@@ -48,32 +36,15 @@ public class ResourceSpawner : MonoBehaviour
         //resourceSpawnTimeMax = 0;
         resourceSpawnTime = 0;
 
-        // DICTIONARY KEY: INDEX | VALUE: LIST<TRANSFORM>
-        indexToZoneListDictionary = new Dictionary<int, List<Transform>>();
-        indexToAvailableZoneListDictionary = new Dictionary<int, List<int>>();
 
         // COMMON/RARE RESOURCE ZONE BETWEEN PLAYERS LISTS
-        disabledCommonResourceTransformListZoneBetween = new List<Transform>();
-        disabledRareResourceTransformListZoneBetween = new List<Transform>();
+        resourcePositionListZoneBetween = new List<Vector3>();
 
         // PLAYERS' COMMON RESOURCE ZONE 1-4 LISTS
-        disabledCommonResourceTransformListZoneOne = new List<Transform>();
-        disabledCommonResourceTransformListZoneTwo = new List<Transform>();
-        disabledCommonResourceTransformListZoneThree = new List<Transform>();
-        disabledCommonResourceTransformListZoneFour = new List<Transform>();
-
-        // PLAYERS' RARE RESOURCE ZONE 1-4 LISTS
-        disabledRareResourceTransformListZoneOne = new List<Transform>();
-        disabledRareResourceTransformListZoneTwo = new List<Transform>();
-        disabledRareResourceTransformListZoneThree = new List<Transform>();
-        disabledRareResourceTransformListZoneFour = new List<Transform>();
-
-        // AVAILABLE ZONES INDEXES
-        availableDisabledResourcesIndexesZoneOne = new List<int>();
-        availableDisabledResourcesIndexesZoneTwo = new List<int>();
-        availableDisabledResourcesIndexesZoneThree = new List<int>();
-        availableDisabledResourcesIndexesZoneFour = new List<int>();
-        availableDisabledResourcesIndexesZoneBetween = new List<int>();
+        resourcePositionListZoneOne = new List<Vector3>();
+        resourcePositionListZoneTwo = new List<Vector3>();
+        resourcePositionListZoneThree = new List<Vector3>();
+        resourcePositionListZoneFour = new List<Vector3>();
 
         for (int i = -4; i < 5; i++)
         {
@@ -87,72 +58,68 @@ public class ResourceSpawner : MonoBehaviour
                 
                 Vector3 resourcePosition = new Vector3(i, 0, j);
 
-                Transform commonResourceTransorm = Instantiate(commonResourcePrefab, resourcePosition, Quaternion.identity);
-                commonResourceTransorm.gameObject.SetActive(false);
-                Transform rareResourceTransorm = Instantiate(rareResourcePrefab, resourcePosition, Quaternion.identity);
-                rareResourceTransorm.gameObject.SetActive(false);
-
                 if (i == 0 || j == 0)
                 {
                     // ZONE IN BETWEEN PLAYERS
-                    disabledCommonResourceTransformListZoneBetween.Add(commonResourceTransorm);
-                    disabledRareResourceTransformListZoneBetween.Add(rareResourceTransorm);
-
-                    availableDisabledResourcesIndexesZoneBetween.Add(availableDisabledResourcesIndexesZoneBetween.Count);
+                    resourcePositionListZoneBetween.Add(resourcePosition);
                 }
                 else if ((i >= -4 && i <= 0) && (j >= -4 && j <= 0))
                 {
                     // ZONE 1
-                    disabledCommonResourceTransformListZoneOne.Add(commonResourceTransorm);
-                    disabledRareResourceTransformListZoneOne.Add(rareResourceTransorm);
-
-                    availableDisabledResourcesIndexesZoneOne.Add(availableDisabledResourcesIndexesZoneOne.Count);
+                    resourcePositionListZoneOne.Add(resourcePosition);
                 }
                 else if ((i <= 4 && i >= 0) && (j >= -4 && j <= 0))
                 {
                     // ZONE 2
-                    disabledCommonResourceTransformListZoneTwo.Add(commonResourceTransorm);
-                    disabledRareResourceTransformListZoneTwo.Add(rareResourceTransorm);
-
-                    availableDisabledResourcesIndexesZoneTwo.Add(availableDisabledResourcesIndexesZoneTwo.Count);
+                    resourcePositionListZoneTwo.Add(resourcePosition);
                 }
                 else if ((i <= 4 && i >= 0) && (j <= 4 && j >= 0))
                 {
                     // ZONE 3
-                    disabledCommonResourceTransformListZoneThree.Add(commonResourceTransorm);
-                    disabledRareResourceTransformListZoneThree.Add(rareResourceTransorm);
-
-                    availableDisabledResourcesIndexesZoneThree.Add(availableDisabledResourcesIndexesZoneThree.Count);
+                    resourcePositionListZoneThree.Add(resourcePosition);
                 }
                 else if ((i >= -4 && i <= 0) && (j <= 4 && j >= 0))
                 {
                     // ZONE 4
-                    disabledCommonResourceTransformListZoneFour.Add(commonResourceTransorm);
-                    disabledRareResourceTransformListZoneFour.Add(rareResourceTransorm);
-
-                    availableDisabledResourcesIndexesZoneFour.Add(availableDisabledResourcesIndexesZoneFour.Count);
+                    resourcePositionListZoneFour.Add(resourcePosition);
                 }
             }
         }
 
-        // Store all the above info in dictionaries, to avoid complex resource spawn process
-        indexToZoneListDictionary[0] = disabledCommonResourceTransformListZoneOne;
-        indexToZoneListDictionary[1] = disabledRareResourceTransformListZoneOne;
-        indexToZoneListDictionary[2] = disabledCommonResourceTransformListZoneTwo;
-        indexToZoneListDictionary[3] = disabledRareResourceTransformListZoneTwo;
-        indexToZoneListDictionary[4] = disabledCommonResourceTransformListZoneThree;
-        indexToZoneListDictionary[5] = disabledRareResourceTransformListZoneThree;
-        indexToZoneListDictionary[6] = disabledCommonResourceTransformListZoneFour;
-        indexToZoneListDictionary[7] = disabledRareResourceTransformListZoneFour;
-        indexToZoneListDictionary[8] = disabledRareResourceTransformListZoneBetween;
-        indexToZoneListDictionary[9] = disabledRareResourceTransformListZoneBetween;
-
-        indexToAvailableZoneListDictionary[0] = availableDisabledResourcesIndexesZoneOne;
-        indexToAvailableZoneListDictionary[2] = availableDisabledResourcesIndexesZoneTwo;
-        indexToAvailableZoneListDictionary[4] = availableDisabledResourcesIndexesZoneThree;
-        indexToAvailableZoneListDictionary[6] = availableDisabledResourcesIndexesZoneFour;
-        indexToAvailableZoneListDictionary[8] = availableDisabledResourcesIndexesZoneBetween;
-
+        // 5 zones - 1-4 zone and between
+        for (int k = 0; k < 5; k++)
+        {
+            if (k == 0)
+            {
+                Debug.Log($"{k} -> {resourcePositionListZoneBetween.Count}");
+                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneBetween.Count);
+                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneBetween.Count);
+            }
+            if (k == 1)
+            {
+                Debug.Log($"{k} -> {resourcePositionListZoneOne.Count}");
+                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneOne.Count);
+                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneOne.Count);
+            }
+            if (k == 2)
+            {
+                Debug.Log($"{k} -> {resourcePositionListZoneTwo.Count}");
+                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneTwo.Count);
+                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneTwo.Count);
+            }
+            if (k == 3)
+            {
+                Debug.Log($"{k} -> {resourcePositionListZoneThree.Count}");
+                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneThree.Count);
+                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneThree.Count);
+            }
+            if (k == 4)
+            {
+                Debug.Log($"{k} -> {resourcePositionListZoneFour.Count}");
+                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneFour.Count);
+                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneFour.Count);
+            }
+        }
         SpawnHolyResource();
     }
 
@@ -166,43 +133,40 @@ public class ResourceSpawner : MonoBehaviour
             return;
         }
 
-        int resourceType = Random.Range(0, 11); // 0-10, 0-7(70%) common, 8-10(30%) rare
-        SpawnResource(resourceType <= 7 ? Resource.ResourceType.Common : Resource.ResourceType.Rare);
+        int resourceType = Random.Range(0, 10); // 0-9, 0-6(70%) common, 7-9(30%) rare
+        SpawnResource(resourceType <= 6 ? true : false);
     }
 
-    private void SpawnResource(Resource.ResourceType resourceType)
+    private void SpawnResource(bool isCommonResource)
     {
         resourceSpawnTime = resourceSpawnTimeMax;
 
-        bool resourceTypeCommon = resourceType == Resource.ResourceType.Common;
-
-        // Check if there is place to spawn left
-        bool allOccupiedTemp = true;
-
-        // Get through each zone and spawn one resource on it
-        for (int i = 0; i < indexToZoneListDictionary.Keys.Count; i += 2)
+        for (int i = 0; i < 5; i++)
         {
-            // Get random Index from Current Zone that is available to spawn Transform
-            if (indexToAvailableZoneListDictionary[i].Count == 0) continue;
-            allOccupiedTemp = false;
+            Resource resource = resourcePool.GetResource(isCommonResource ? commonResourcePrefab : rareResourcePrefab, i);
+            if (resource != null)
+            {
+                if (i == 0) resource.transform.position = resourcePositionListZoneBetween[Random.Range(0, resourcePositionListZoneBetween.Count)];
+                else if (i == 1) resource.transform.position = resourcePositionListZoneOne[Random.Range(0, resourcePositionListZoneOne.Count)];
+                else if (i == 2) resource.transform.position = resourcePositionListZoneTwo[Random.Range(0, resourcePositionListZoneTwo.Count)];
+                else if (i == 3) resource.transform.position = resourcePositionListZoneThree[Random.Range(0, resourcePositionListZoneThree.Count)];
+                else if (i == 4) resource.transform.position = resourcePositionListZoneFour[Random.Range(0, resourcePositionListZoneFour.Count)];
 
-            int randomIndex = indexToAvailableZoneListDictionary[i][Random.Range(0, indexToAvailableZoneListDictionary[i].Count)];
-            Transform resourceTransformToSpawn = resourceTypeCommon
-                ? indexToZoneListDictionary[i][randomIndex] // Common resource
-                : indexToZoneListDictionary[i + 1][randomIndex]; // Rare resource
-            // Remove random Index not to spawn on the same spot, it will be restored when resource has been gathered -> ClearOccupiedZone
-            indexToAvailableZoneListDictionary[i].Remove(randomIndex);
-
-            // Enable resource
-            resourceTransformToSpawn.gameObject.SetActive(true);
-            // Spawn resource for other players
-            resourceTransformToSpawn.GetComponent<NetworkObject>().Spawn();
-            // Save occupied zone index and index of resource on this zone
-            resourceTransformToSpawn.GetComponent<Resource>().SetOccupiedZone(randomIndex, i);
-            resourceTransformToSpawn.GetComponent<Resource>().SetResourceWeight();
+                // Enable resource
+                resource.gameObject.SetActive(true);
+                // Spawn resource for other players
+                resource.GetComponent<NetworkObject>().Spawn();
+                resource.GetComponent<Resource>().SetOccupiedZone(i);
+                // Save occupied zone index and index of resource on this zone
+                resource.GetComponent<Resource>().SetResourceWeight();
+            }
         }
 
-        allOccupied = allOccupiedTemp;
+        allOccupied = (resourcePositionListZoneBetween.Count == 0 &&
+            resourcePositionListZoneOne.Count == 0 &&
+            resourcePositionListZoneTwo.Count == 0 &&
+            resourcePositionListZoneThree.Count == 0 &&
+            resourcePositionListZoneFour.Count == 0);
     }
 
     private void SpawnHolyResource()
@@ -213,11 +177,10 @@ public class ResourceSpawner : MonoBehaviour
         holyResource.SetActive(true);
     }
 
-    public void ClearOccupiedZone(int occupiedIndex, int occupiedZoneIndex)
+    public void ClearOccupiedZone(Resource resource, int index)
     {
-        // Restore occupied zone
-        indexToAvailableZoneListDictionary[occupiedZoneIndex].Add(occupiedIndex);
-
+        if (resource.IsCommonResource()) resourcePool.ReturnResource(commonResourcePrefab, resource, index);
+        else resourcePool.ReturnResource(rareResourcePrefab, resource, index);
         allOccupied = false;
     }
 

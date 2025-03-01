@@ -27,15 +27,16 @@ public class Building : NetworkBehaviour
 
     private bool unitsAllowedToSpawn = false;
     // SERVER STATS
-    [SerializeField] private Transform unitPrefab;
+    [SerializeField] private Unit unitPrefab;
     private Vector3 unitSpawnPoint;
     private List<int> disabledMinersIndexes;
     private List<Transform> prespawnedUnits;
+    [SerializeField] private UnitPool unitPool;
     // NEUTRAL BUILDING
     public Occupation occupationStatus;
     public bool isNeutralBuilding;
-    private ulong claimedByPlayerWithClientId;
-    private float claimingPercentage;
+    private ulong claimedByPlayerWithClientId = 999;
+    private float claimingPercentage = 0;
     // UI / MATERIALS
     [SerializeField] private Material playerBuildingMaterial;
     [SerializeField] private Material enemyPlayerBuildingMaterial;
@@ -112,18 +113,7 @@ public class Building : NetworkBehaviour
 
     public void PreCreateUnits(Vector3 unitSpawnPoint)
     {
-        claimedByPlayerWithClientId = 999;
-        claimingPercentage = 0;
-        prespawnedUnits = new List<Transform>();
-        disabledMinersIndexes = new List<int>();
-        this.unitSpawnPoint = unitSpawnPoint;
-        for (int i = 0; i < amoutOfMinersMax; i++)
-        {
-            disabledMinersIndexes.Add(i);
-            Transform unitTransform = Instantiate(unitPrefab, unitSpawnPoint, Quaternion.identity);
-            unitTransform.gameObject.SetActive(false);
-            prespawnedUnits.Add(unitTransform);
-        }
+        unitPool.PredefineUnitPoolByHost(unitPrefab, unitSpawnPoint);
     }
 
     private void GameManager_OnGameReady(object sender, EventArgs e)
@@ -179,22 +169,10 @@ public class Building : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void SpawnMinerServerRpc(int buildingLevel, Vector3 getBackPosition, Vector3 directionToMove, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus, ServerRpcParams serverRpcParams = default)
     {
-        // Get inactive miner index
-        int minerIndex = disabledMinersIndexes[0];
-        // Enable the disabled miner
-        Transform unitTransform = prespawnedUnits[minerIndex];
-        unitTransform.gameObject.SetActive(true);
-        unitTransform.position = unitSpawnPoint;
-        
-        // Remove from inactive indexes
-        disabledMinersIndexes.Remove(minerIndex);
-        // Set-up unit
-        Unit unit = unitTransform.GetComponent<Unit>();
-        // Spawn with ownership of the building owner
+        Unit unit = unitPool.GetUnit();
         unit.NetworkObject.SpawnWithOwnership(serverRpcParams.Receive.SenderClientId);
         unit.SetOwnerBuildingForServer(this);
-        unit.SetHealthForUnit(buildingLevel);
-        unit.InitializeOwnerRpc(buildingLevel, getBackPosition, directionToMove, minerIndex, tempBonus, permBonus);
+        unit.InitializeOwnerRpc(buildingLevel, getBackPosition, directionToMove, tempBonus, permBonus);
     }
 
     public void BuildingGainXP(float xp, float holyResource)
@@ -296,14 +274,9 @@ public class Building : NetworkBehaviour
         }
     }
 
-    public void ResetUnit(int unitIndex)
+    public void ResetUnit(Unit unit)
     {
-        // Disable/Reset the enabled miner
-        Transform unitTransform = prespawnedUnits[unitIndex];
-        unitTransform.gameObject.SetActive(false);
-        unitTransform.position = unitSpawnPoint;
-        // Restore disabled miner indexes
-        disabledMinersIndexes.Add(unitIndex);
+        unitPool.ReturnUnit(unit);
         NotifyAboutDisabledUnitOwnerRpc();
     }
 
@@ -323,10 +296,4 @@ public class Building : NetworkBehaviour
     {
         unitsAllowedToSpawn = true;
     }
-
-    //[Rpc(SendTo.Owner)]
-    //public void CollectHolyResourceDataOwnerRpc()
-    //{
-    //    GameManager.Instance.SendHolyResourceDataServerRpc(holyResourceGathered);
-    //}
 }

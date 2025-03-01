@@ -234,13 +234,12 @@ public class GameManager : NetworkBehaviour
         OnGameFinished = null;
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    public void UpdatePlayerHolyResourceDataServerRpc(float holyResourceGathered, ServerRpcParams serverRpcParams = default)
+    public void UpdatePlayerHolyResourceData(float holyResourceGathered, ulong clientId)
     {
         for (int i = 0; i < playerHolyResourceDataNetworkList.Count; i++)
         {
             PlayerHolyResourceData playerHolyResourceData = playerHolyResourceDataNetworkList[i];
-            if (playerHolyResourceData.clientId == serverRpcParams.Receive.SenderClientId)
+            if (playerHolyResourceData.clientId == clientId)
             {
                 playerHolyResourceData.holyResourceGathered += holyResourceGathered;
                 playerHolyResourceDataNetworkList[i] = playerHolyResourceData;

@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 244934626832214620}
   - component: {fileID: 7950855596073672342}
+  - component: {fileID: 4980611385079382318}
   m_Layer: 0
   m_Name: ResourceSpawner
   m_TagString: Untagged
@@ -44,8 +45,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d293e1d8379b2184b98e0ed2217280a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  commonResourcePrefab: {fileID: 1506627116497683528, guid: 9aa33c18feab66042be3b3015d617055, type: 3}
-  rareResourcePrefab: {fileID: 3426724889012246049, guid: 36e8b4f832b3b4349a932846525127ee, type: 3}
+  commonResourcePrefab: {fileID: 4162433048960480812, guid: 9aa33c18feab66042be3b3015d617055, type: 3}
+  rareResourcePrefab: {fileID: 1691201914972494936, guid: 36e8b4f832b3b4349a932846525127ee, type: 3}
   holyResourcePrefab: {fileID: 2287146029482801686, guid: f78543141ace1d24a9071656139a2ee3, type: 3}
+  resourcePool: {fileID: 4980611385079382318}
   resourceSpawnTime: 0
   resourceSpawnTimeMax: 0
+--- !u!114 &4980611385079382318
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 605915402215295252}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d3140acd771cff4db81f2145d7f59aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

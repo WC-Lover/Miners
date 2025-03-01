@@ -628,6 +628,7 @@ GameObject:
   - component: {fileID: 6722516004824819686}
   - component: {fileID: 5395708073515392619}
   - component: {fileID: 6037167300793634881}
+  - component: {fileID: 2764912120006036116}
   m_Layer: 0
   m_Name: NeutralBuilding
   m_TagString: Untagged
@@ -691,9 +692,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
-  unitPrefab: {fileID: 5269843754611534360, guid: e5e1c00cac5f1c44b8260215a0e56138, type: 3}
+  unitPrefab: {fileID: 8198892757889884387, guid: e5e1c00cac5f1c44b8260215a0e56138, type: 3}
+  unitPool: {fileID: 2764912120006036116}
   occupationStatus: 1
   isNeutralBuilding: 1
   playerBuildingMaterial: {fileID: 2100000, guid: 0a5662381b373a7489ae50ef293a35c3, type: 2}
   enemyPlayerBuildingMaterial: {fileID: 2100000, guid: d067932a1c0657245a38b75875b60d5e, type: 2}
   neutralBuildingMaterial: {fileID: 2100000, guid: 9238df73c2eec1a41859226ff9eb0c79, type: 2}
+  bonusSelectionUI: {fileID: 0}
+  playerBuildingUI: {fileID: 0}
+--- !u!114 &2764912120006036116
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9029771638969087183}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30bf227d00ba50f46a4ce2cb088e2d9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  unitPoolSize: 10

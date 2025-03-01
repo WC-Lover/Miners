@@ -36,10 +36,7 @@ public class LobbyUI : MonoBehaviour
             currentReadyButtonColor = readyButton.GetComponent<Image>().color;
             readyButton.GetComponent<Image>().color = currentReadyButtonColor == greenReadyButtonColor ? redReadyButtonColor : greenReadyButtonColor; 
         });
-    }
 
-    void Start()
-    {
         GameMultiplayerManager.Instance.OnPlayerDataNetworkListChanged += GameMultiplayer_OnPlayerDataNetworkListChanged;
     }
 

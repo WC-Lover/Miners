@@ -12,37 +12,32 @@ public class Unit : NetworkBehaviour
     [SerializeField] private Material playerUnitMaterial;
     [SerializeField] private Material enemyUnitMaterial;
 
-    [Header("Debug")]
-    [SerializeField] private UnitState currentState;
-    [SerializeField] public float stamina;
-    [SerializeField] private float carryingWeight;
-    [SerializeField] private float holyResourceWeight;
-    [SerializeField] private float carryingWeightReturned;
+    [SerializeField] private UnitUI unitUI;
 
-    public NetworkVariable<float> health = new NetworkVariable<float>();
     private UnitStats stats;
+    private float stamina;
+    private float health;
+    private float carryingWeight;
+    private float holyResourceWeight;
+    private float carryingWeightReturned;
+
+    private UnitState currentState;
     private SearchSettings searchSettings;
     private MovementSettings movementSettings;
-    [SerializeField] private InteractionTarget currentTarget;
+    private InteractionTarget currentTarget;
     private Rigidbody rb;
     private Building serverOwnerBuilding;
     private int minerIndex;
     private float rangeOfInteraction;
-
     private Vector3 basePosition;
-    public EventHandler OnUnitDespawn;
-    public event EventHandler<OnStaminaChangedEventArgs> OnStaminaChanged;
-    public class OnStaminaChangedEventArgs : EventArgs
-    {
-        public float stamina;
-    }
-    public event EventHandler OnUnloadedResources;
-    public event EventHandler<OnResourceGatheredEventArgs> OnResourceGathered;
-    public class OnResourceGatheredEventArgs : EventArgs
-    {
-        public bool holyResource;
-    }
-    public event EventHandler OnUnitDied; // Use with custom args to give killer Unit resources of killed Unit
+
+    // ACTIONS
+    public Action OnUnitDespawn;
+    public Action<float, float> OnHealthChanged; // health, healthMax
+    public Action<float, float> OnStaminaChanged; // stamina, staminaMax
+    public Action OnUnloadedResources;
+    public Action<bool> OnResourceGathered; // isHolyResource
+    public Action<float> OnUnitDied; // holyResourceWeight
 
     private enum UnitState
     {
@@ -57,6 +52,7 @@ public class Unit : NetworkBehaviour
     private struct UnitStats
     {
         public float Speed;
+        public float HealthMax;
         public float GatherPower;
         public float AttackDamage;
         public float StaminaMax;
@@ -90,25 +86,17 @@ public class Unit : NetworkBehaviour
     }
 
     public void SetOwnerBuildingForServer(Building ownerBuilding) => serverOwnerBuilding = ownerBuilding;
-    public void SetHealthForUnit(int buildingLevel) => health.Value = buildingLevel + 3;
-    public void SetUnitUI()
-    {
-        GetComponentInChildren<UnitUI>().SetUp(health.Value, stats.StaminaMax);
-    }
 
     [Rpc(SendTo.Owner)]
-    public void InitializeOwnerRpc(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, int minerIndex, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus)
+    public void InitializeOwnerRpc(int buildingLevel, Vector3 basePosition, Vector3 spawnDirection, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus)
     {
-        if (!IsOwner) return;
-
         rb = GetComponent<Rigidbody>();
 
-        SetUnitUI();
+        unitUI.SetUp();
         InitializeStats(buildingLevel, basePosition, spawnDirection, tempBonus, permBonus);
         TransitionState(UnitState.ApproachingSpawnPosition);
         currentTarget = new InteractionTarget { Position = spawnDirection, RangeOfInteraction = 0.14f }; // range is unit width / 2 + 0.015f
 
-        this.minerIndex = minerIndex;
         this.basePosition = basePosition;
     }
 
@@ -122,6 +110,7 @@ public class Unit : NetworkBehaviour
         stats = new UnitStats
         {
             Speed = buildingLevel * 0.1f + 0.4f + (tempBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0) + (permBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0),
+            HealthMax = buildingLevel + 3,
             GatherPower = buildingLevel * 0.5f + 1 + (tempBonus == BonusSelectUI.Bonus.Gather ? 0.25f : 0) + (permBonus == BonusSelectUI.Bonus.Gather ? 0.25f : 0),
             AttackDamage = buildingLevel * 0.2f + 1 + (tempBonus == BonusSelectUI.Bonus.Damage ? 0.25f : 0) + (permBonus == BonusSelectUI.Bonus.Damage ? 0.25f : 0),
             StaminaMax = (buildingLevel / 5) + 4 + (tempBonus == BonusSelectUI.Bonus.Damage ? 1f : 0) + (permBonus == BonusSelectUI.Bonus.Damage ? 1f : 0),
@@ -147,6 +136,7 @@ public class Unit : NetworkBehaviour
 
         rangeOfInteraction = 0.25f; // Units' width. Only used in Unit-Unit interaction. 
         stamina = stats.StaminaMax;
+        health = stats.HealthMax;
     }
 
     private void InitializeMaterials()
@@ -205,6 +195,8 @@ public class Unit : NetworkBehaviour
 
     private void UpdateSearch()
     {
+        StopMoving();
+
         currentTarget = FindNearestInteraction();
 
         if (currentTarget != null)
@@ -234,12 +226,22 @@ public class Unit : NetworkBehaviour
             return;
         }
 
+        StopMoving();
+
         PerformInteraction();
 
         if (ShouldReturnToBase())
         {
-            OnInteractionTargetDespawn(null, EventArgs.Empty); // If object is no longer of interest, unsubscribe from delegate
+            OnInteractionTargetDespawn(); // If object is no longer of interest, unsubscribe from delegate
             TransitionState(UnitState.ReturningToBase);
+        }
+    }
+
+    private void StopMoving()
+    {
+        if (rb.linearVelocity.magnitude > 0)
+        {
+            rb.linearVelocity = Vector3.zero;
         }
     }
 
@@ -250,6 +252,8 @@ public class Unit : NetworkBehaviour
 
     private void UpdateRestore()
     {
+        StopMoving();
+
         if (currentTarget != null && currentTarget.Building != null && currentTarget.Building.IsOwner)
         {
             currentTarget.Building.BuildingGainXP(carryingWeight * Time.fixedDeltaTime, holyResourceWeight);
@@ -258,15 +262,21 @@ public class Unit : NetworkBehaviour
 
             carryingWeight = Mathf.Max(carryingWeight - Time.fixedDeltaTime, 0);
             stamina = Mathf.Min(stamina + Time.fixedDeltaTime, stats.StaminaMax);
-
-            OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
+            // Instead of updating every frame, return resource at once, and then start coroutine which will fill up the stats?
+            OnStaminaChanged?.Invoke(stamina, stats.StaminaMax);
         }
         if (stamina >= stats.StaminaMax && carryingWeight <= 0)
         {
             currentTarget = null;
-            OnUnloadedResources?.Invoke(this, EventArgs.Empty);
+            UnloadResourceEveryoneRpc();
             TransitionState(UnitState.SearchingForInteraction);
         }
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void UnloadResourceEveryoneRpc()
+    {
+        OnUnloadedResources?.Invoke();
     }
     #endregion
 
@@ -292,7 +302,7 @@ public class Unit : NetworkBehaviour
         return currentTarget.RangeOfInteraction >= Vector3.Distance(transform.position, targetPosition);
     }
 
-    private void OnInteractionTargetDespawn(object sender, EventArgs e)
+    private void OnInteractionTargetDespawn()
     {
         if (currentTarget == null) return;
 
@@ -310,6 +320,8 @@ public class Unit : NetworkBehaviour
         }
 
         currentTarget = null;
+
+        StopMoving();
     }
 
     private void RotateTowards(Vector3 direction)
@@ -512,7 +524,6 @@ public class Unit : NetworkBehaviour
     private bool CanInteract()
     {
         bool canInteract = stamina > 0 && carryingWeight < stats.CarryCapacity;
-        if (currentTarget.Unit != null) canInteract &= currentTarget.Unit.health.Value > 0;
         if (currentTarget.Building != null) canInteract &= currentTarget.Building.isNeutralBuilding 
                 && (currentTarget.Building.occupationStatus == Building.Occupation.Empty || !currentTarget.Building.IsOwner);
         if (currentTarget.Resource != null) canInteract &= currentTarget.Resource.weight.Value > 0;
@@ -538,7 +549,7 @@ public class Unit : NetworkBehaviour
         stamina -= Time.fixedDeltaTime;
         if (currentTarget.Unit != null)
         {
-            currentTarget.Unit.InteractWithOtherUnitServerRpc(stats.AttackDamage * Time.fixedDeltaTime);
+            currentTarget.Unit.InteractWithOtherUnitOwnerRpc(stats.AttackDamage * Time.fixedDeltaTime, OwnerClientId);
         }
         else if (currentTarget.Building != null)
         {
@@ -547,25 +558,26 @@ public class Unit : NetworkBehaviour
         else if (currentTarget.Resource != null)
         {
             float gatheredAtOnce = stats.GatherPower * Time.fixedDeltaTime;
+            
+            if (carryingWeight == 0 && !currentTarget.Resource.IsHolyResource()) GatheredResourceEveryoneRpc(false);
+            
             carryingWeight += gatheredAtOnce;
+
             if (currentTarget.Resource.IsHolyResource())
             {
+                if (holyResourceWeight == 0) GatheredResourceEveryoneRpc(true);
                 holyResourceWeight += gatheredAtOnce;
-                GameManager.Instance.UpdatePlayerHolyResourceDataServerRpc(gatheredAtOnce);
-                OnResourceGathered?.Invoke(this, new OnResourceGatheredEventArgs {
-                    holyResource = true
-                });
             }
-            else
-            {
-                OnResourceGathered?.Invoke(this, new OnResourceGatheredEventArgs
-                {
-                    holyResource = false
-                });
-            }
+            
             currentTarget.Resource.InteractWithResourceServerRpc(gatheredAtOnce);
         }
-        OnStaminaChanged?.Invoke(this, new OnStaminaChangedEventArgs { stamina = this.stamina });
+        OnStaminaChanged?.Invoke(stamina, stats.StaminaMax);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void GatheredResourceEveryoneRpc(bool isHolyResource)
+    {
+        OnResourceGathered?.Invoke(isHolyResource);
     }
 
     private void TransitionState(UnitState newState)
@@ -592,27 +604,35 @@ public class Unit : NetworkBehaviour
     }
     #endregion
 
-    [Rpc(SendTo.Server)]
-    private void InteractWithOtherUnitServerRpc(float damage)
+    [Rpc(SendTo.Owner)]
+    private void InteractWithOtherUnitOwnerRpc(float damage, ulong killerClientId)
     {
-        if (health.Value > 0) health.Value -= damage;
-        if (health.Value <= 0) DespawnUnit();
+        if (health > 0)
+        {
+            health = Math.Max(health - damage, 0);
+            if (health == 0)
+            {
+                NotifyClientsUnitDespawnEverybodyRpc();
+                DespawnUnitServerRpc(holyResourceWeight, killerClientId);
+            }
+        }
     }
 
-    private void DespawnUnit()
+    [ServerRpc(RequireOwnership = false)]
+    private void DespawnUnitServerRpc(float holyResource, ulong killerClientId, ServerRpcParams serverRpcParams = default)
     {
-        //if (holyResourceWeight > 0)  
-        NotifyClientsUnitDespawnEverybodyRpc();
-        serverOwnerBuilding.ResetUnit(minerIndex);
+        GameManager.Instance.UpdatePlayerHolyResourceData(-holyResource, serverRpcParams.Receive.SenderClientId);
+        GameManager.Instance.UpdatePlayerHolyResourceData(holyResource, killerClientId);
+
+        serverOwnerBuilding.ResetUnit(this);
         NetworkObject.Despawn(false);
-        gameObject.SetActive(false);
     }
 
     [Rpc(SendTo.Everyone)]
     private void NotifyClientsUnitDespawnEverybodyRpc()
     {
         // Unsubscribe to avoid Memory Leaks and Ghost Callbacks
-        OnUnitDespawn?.Invoke(this, EventArgs.Empty);
+        OnUnitDespawn?.Invoke();
         OnUnitDespawn = null; // just to be sure
     }
 

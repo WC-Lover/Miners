@@ -7,15 +7,15 @@ public class Resource : NetworkBehaviour
 
     public NetworkVariable<float> weight = new NetworkVariable<float>();
     [SerializeField] private ResourceSO resourceData;
-    private int occupiedZoneIndex;
     private int occupiedIndex;
     public float rangeOfInteraction;
-    public EventHandler OnResourceDespawn;
-    public EventHandler OnResourceInteraction;
+
+    public Action OnResourceDespawn;
+    public Action OnResourceInteraction;
 
     public void SetResourceWeight() => weight.Value = resourceData.baseValue;
-
     public bool IsHolyResource() => resourceData.type == ResourceType.Holy;
+    public bool IsCommonResource() => resourceData.type == ResourceType.Common;
 
     public override void OnNetworkSpawn()
     {
@@ -40,15 +40,17 @@ public class Resource : NetworkBehaviour
         Holy
     }
 
-    [Rpc(SendTo.Server)]
-    public void InteractWithResourceServerRpc(float gatherWeight)
-    {
-        if (weight.Value - gatherWeight > 0)
+    [ServerRpc(RequireOwnership = false)]
+    public void InteractWithResourceServerRpc(float gatherWeight, ServerRpcParams serverRpcParams = default)
+    {        
+        if (weight.Value > 0)
         {
-            OnResourceInteraction?.Invoke(this, EventArgs.Empty);
-            weight.Value -= gatherWeight;
+            OnResourceInteraction?.Invoke();
+            float resourceWeightGathered = weight.Value > gatherWeight ? gatherWeight : weight.Value;
+            weight.Value -= resourceWeightGathered;
+            if (resourceData.type == ResourceType.Holy) GameManager.Instance.UpdatePlayerHolyResourceData(resourceWeightGathered, serverRpcParams.Receive.SenderClientId);
+            if (weight.Value == 0) ResourceHasBeenGathered();
         }
-        else ResourceHasBeenGathered();
     }
 
     private void ResourceHasBeenGathered()
@@ -62,7 +64,7 @@ public class Resource : NetworkBehaviour
         }
         else
         {
-            ResourceSpawner.Instance.ClearOccupiedZone(occupiedIndex, occupiedZoneIndex);
+            ResourceSpawner.Instance.ClearOccupiedZone(this, occupiedIndex);
         }
         
         NetworkObject.Despawn(false);
@@ -73,13 +75,12 @@ public class Resource : NetworkBehaviour
     private void NotifyClientsResourceDespawnEverybodyRpc()
     {
         // Unsubscribe to avoid Memory Leaks and Ghost Callbacks
-        OnResourceDespawn?.Invoke(this, EventArgs.Empty);
+        OnResourceDespawn?.Invoke();
         OnResourceDespawn = null;
     }
 
-    public void SetOccupiedZone(int occupiedIndex, int occupiedZoneIndex)
+    public void SetOccupiedZone(int occupiedIndex)
     {
-        this.occupiedZoneIndex = occupiedZoneIndex;
         this.occupiedIndex = occupiedIndex;
     }
 }

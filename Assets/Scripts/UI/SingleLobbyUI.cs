@@ -1,3 +1,5 @@
+using System;
+using System.Collections;
 using TMPro;
 using Unity.Services.Lobbies.Models;
 using UnityEngine;
@@ -7,6 +9,7 @@ public class SingleLobbyUI : MonoBehaviour
 {
 
     [SerializeField] private TextMeshProUGUI lobbyNameText;
+    [SerializeField] private TextMeshProUGUI lobbyPlayersAmountText;
     private Lobby lobby;
 
     private void Awake()
@@ -21,5 +24,6 @@ public class SingleLobbyUI : MonoBehaviour
     {
         this.lobby = lobby;
         lobbyNameText.text = lobby.Name;
+        lobbyPlayersAmountText.text = $"{lobby.Players.Count}/{lobby.MaxPlayers}";
     }
 }

@@ -14,7 +14,10 @@ public class MainMenuUI : MonoBehaviour
 
     private void Awake()
     {
+        Debug.Log("button set");
+
         startButton.onClick.AddListener(() => {
+            Debug.Log("START");
             Loader.Load(Loader.Scene.LobbyMenuScene);
         });
 
