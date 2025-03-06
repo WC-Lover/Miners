@@ -15,5 +15,5 @@ MonoBehaviour:
   type: 1
   material: {fileID: 2100000, guid: e803194647cc7aa498d40e3e2561d36e, type: 2}
   baseValue: 6
-  interactionRange: 0.31
+  interactionRange: 0.4
   pickupSound: {fileID: 0}

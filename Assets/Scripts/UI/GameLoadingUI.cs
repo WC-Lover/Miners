@@ -21,7 +21,7 @@ public class GameLoadingUI : MonoBehaviour
         StartCoroutine(AnimateLoadingText());
     }
 
-    private void GameConnectionManager_OnGameReady(object sender, EventArgs e)
+    private void GameConnectionManager_OnGameReady()
     {
         GameManager.Instance.OnGameReady -= GameConnectionManager_OnGameReady;
         StopCoroutine(AnimateLoadingText());

@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using NUnit.Framework;
+using Assets.Scripts.Unit;
 using Unity.Netcode;
-using UnityEditor.PackageManager;
 using UnityEngine;
-using static UnityEngine.Rendering.DebugUI;
 
 public class Building : NetworkBehaviour
 {
+    public static Building Instance;
+
     // PLAYER STATS
     private float unitSpawnTime;
     private float unitSpawnTimeMax;
@@ -17,7 +16,7 @@ public class Building : NetworkBehaviour
     private int buildingLevel;
     private const int buildingLevelMax = 15;
     private Vector3 baseOfOriginPosition;
-    private const int amoutOfMinersMax = 20;
+    private const int amoutOfMinersMax = 1;
     private int amoutOfMinersSpawned;
 
     private BonusSelectUI.Bonus tempBonus;
@@ -70,7 +69,32 @@ public class Building : NetworkBehaviour
 
     private void Awake()
     {
+        buildingXP = 0;
+        buildingXPMax = 50;
+        unitSpawnTimeMax = 12;
+        unitSpawnTime = 0;
+        buildingLevel = 0;
+        amoutOfMinersSpawned = 0;
         GameManager.Instance.OnGameFinished += GameManager_OnGameFinished;
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        if (IsOwner && !isNeutralBuilding)
+        {
+            Instance = this;
+            GameManager.Instance.OnGameReady += GameManager_OnGameReady;
+        }
+    }
+
+    private void GameManager_OnGameReady()
+    {
+        if (!isNeutralBuilding)
+        {
+            bonusSelectionUI.gameObject.SetActive(true);
+            playerBuildingUI.gameObject.SetActive(true);
+        }
+        GameManager.Instance.OnGameReady -= GameManager_OnGameReady;
     }
 
     private void GameManager_OnGameFinished(object sender, GameManager.OnGameFinishedEventArgs e)
@@ -79,31 +103,18 @@ public class Building : NetworkBehaviour
     }
 
     [Rpc(SendTo.Owner)]
-    public void SetBasePositionOwnerRpc(Vector3 baseOfOriginPosition, bool isNeutralBuilding)
+    public void SetBuildingOwnerRpc(Vector3 baseOfOriginPosition)
     {
         this.baseOfOriginPosition = baseOfOriginPosition;
-        SetBuildingEveryoneRpc(isNeutralBuilding);
+        if (!isNeutralBuilding) SetBuildingMaterial();
     }
 
-    [Rpc(SendTo.Everyone)]
-    private void SetBuildingEveryoneRpc(bool isNeutralBuilding)
+    private void SetBuildingMaterial()
     {
-        this.isNeutralBuilding = isNeutralBuilding;
-
-        if (isNeutralBuilding) GameManager.Instance.OnGameReady -= GameManager_OnGameReady;
-
-        occupationStatus = isNeutralBuilding ? Occupation.Empty : Occupation.Occupied;
-
-        if (isNeutralBuilding)
-        {
-            permBonus = BonusSelectUI.Bonus.None;
-            tempBonus = BonusSelectUI.Bonus.None;
-        }
-
         var meshRenderers = GetComponentsInChildren<MeshRenderer>();
         var meshRendererMaterials = new Material[1];
 
-        meshRendererMaterials[0] = isNeutralBuilding ? neutralBuildingMaterial : (IsOwner ? playerBuildingMaterial : enemyPlayerBuildingMaterial);
+        meshRendererMaterials[0] = playerBuildingMaterial;
 
         for (int i = 0; i < meshRenderers.Length; i++)
         {
@@ -116,25 +127,7 @@ public class Building : NetworkBehaviour
         unitPool.PredefineUnitPoolByHost(unitPrefab, unitSpawnPoint);
     }
 
-    private void GameManager_OnGameReady(object sender, EventArgs e)
-    {
-        if (!isNeutralBuilding)
-        {
-            bonusSelectionUI.gameObject.SetActive(true);
-            playerBuildingUI.gameObject.SetActive(true);
-        }
-    }
 
-    public override void OnNetworkSpawn()
-    {
-        if (IsOwner) GameManager.Instance.OnGameReady += GameManager_OnGameReady;
-        buildingXP = 0;
-        buildingXPMax = 50;
-        unitSpawnTimeMax = 12;
-        unitSpawnTime = 0;
-        buildingLevel = 0;
-        amoutOfMinersSpawned = 0;
-    }
 
     private void Update()
     {
@@ -167,12 +160,19 @@ public class Building : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void SpawnMinerServerRpc(int buildingLevel, Vector3 getBackPosition, Vector3 directionToMove, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus, ServerRpcParams serverRpcParams = default)
+    private void SpawnMinerServerRpc(int buildingLevel, Vector3 baseOfOriginPosition, Vector3 firstDestinationPosition, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus, ServerRpcParams serverRpcParams = default)
     {
         Unit unit = unitPool.GetUnit();
         unit.NetworkObject.SpawnWithOwnership(serverRpcParams.Receive.SenderClientId);
         unit.SetOwnerBuildingForServer(this);
-        unit.InitializeOwnerRpc(buildingLevel, getBackPosition, directionToMove, tempBonus, permBonus);
+        unit.Network.InitializeUnit(new UnitSpawnData 
+        { 
+            buildingLevel = buildingLevel,
+            baseOfOriginPosition = baseOfOriginPosition,
+            firstDestinationPosition = firstDestinationPosition,
+            tempBonus = tempBonus,
+            permBonus = permBonus 
+        });
     }
 
     public void BuildingGainXP(float xp, float holyResource)
@@ -200,7 +200,7 @@ public class Building : NetworkBehaviour
 
 
     [ServerRpc(RequireOwnership = false)]
-    public void InteractWithBuildingServerRpc(float claimPower, ServerRpcParams serverRpcParams = default)
+    public void InteractWithNeutralBuildingServerRpc(float claimPower, ServerRpcParams serverRpcParams = default)
     {
         if (claimingPercentage == 0)
         {

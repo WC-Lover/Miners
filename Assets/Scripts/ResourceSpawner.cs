@@ -91,31 +91,26 @@ public class ResourceSpawner : MonoBehaviour
         {
             if (k == 0)
             {
-                Debug.Log($"{k} -> {resourcePositionListZoneBetween.Count}");
                 resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneBetween.Count);
                 resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneBetween.Count);
             }
             if (k == 1)
             {
-                Debug.Log($"{k} -> {resourcePositionListZoneOne.Count}");
                 resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneOne.Count);
                 resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneOne.Count);
             }
             if (k == 2)
             {
-                Debug.Log($"{k} -> {resourcePositionListZoneTwo.Count}");
                 resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneTwo.Count);
                 resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneTwo.Count);
             }
             if (k == 3)
             {
-                Debug.Log($"{k} -> {resourcePositionListZoneThree.Count}");
                 resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneThree.Count);
                 resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneThree.Count);
             }
             if (k == 4)
             {
-                Debug.Log($"{k} -> {resourcePositionListZoneFour.Count}");
                 resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneFour.Count);
                 resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneFour.Count);
             }
@@ -179,7 +174,7 @@ public class ResourceSpawner : MonoBehaviour
 
     public void ClearOccupiedZone(Resource resource, int index)
     {
-        if (resource.IsCommonResource()) resourcePool.ReturnResource(commonResourcePrefab, resource, index);
+        if (resource.IsCommonResource) resourcePool.ReturnResource(commonResourcePrefab, resource, index);
         else resourcePool.ReturnResource(rareResourcePrefab, resource, index);
         allOccupied = false;
     }

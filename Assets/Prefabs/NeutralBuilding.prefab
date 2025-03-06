@@ -65,7 +65,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 9238df73c2eec1a41859226ff9eb0c79, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -363,7 +363,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 9238df73c2eec1a41859226ff9eb0c79, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -692,7 +692,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
-  unitPrefab: {fileID: 8198892757889884387, guid: e5e1c00cac5f1c44b8260215a0e56138, type: 3}
+  unitPrefab: {fileID: 2748250937568006613, guid: e5e1c00cac5f1c44b8260215a0e56138, type: 3}
   unitPool: {fileID: 2764912120006036116}
   occupationStatus: 1
   isNeutralBuilding: 1

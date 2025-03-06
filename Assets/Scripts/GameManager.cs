@@ -13,9 +13,7 @@ public class GameManager : NetworkBehaviour
     public static GameManager Instance;
 
     public NetworkVariable<float> bonusSelectTimer = new NetworkVariable<float>();
-    // Safety reasons instead of public craete event
     private NetworkList<PlayerHolyResourceData> playerHolyResourceDataNetworkList;
-    private Dictionary<ulong, Building> playerBuildingsDict;
 
     [SerializeField] private GameObject playerBuildingPrefab;
     [SerializeField] private GameObject neutralBuildingPrefab;
@@ -26,6 +24,7 @@ public class GameManager : NetworkBehaviour
     private Vector3[] neutralBuildingSpawnPos;
     private Vector3[] neutralBuildingUnitSpawnPos;
     private Vector3[] cameraPositions;
+
     private static int counter;
 
     public EventHandler<OnGameFinishedEventArgs> OnGameFinished;
@@ -33,7 +32,7 @@ public class GameManager : NetworkBehaviour
     {
         public List<PlayerHolyResourceData> playerHolyResourceDataList;
     }
-    public EventHandler OnGameReady;
+    public Action OnGameReady;
     public EventHandler<OnPlayerHolyResourceDataListChangedArgs> OnPlayerHolyResourceDataListChanged;
     public class OnPlayerHolyResourceDataListChangedArgs : EventArgs
     {
@@ -42,9 +41,7 @@ public class GameManager : NetworkBehaviour
 
     private void Awake()
     {
-        Instance = this;
         playerHolyResourceDataNetworkList = new NetworkList<PlayerHolyResourceData>();
-        playerHolyResourceDataNetworkList.OnListChanged += PlayerHolyResourceDataList_OnListChanged;
     }
 
     private void PlayerHolyResourceDataList_OnListChanged(NetworkListEvent<PlayerHolyResourceData> changeEvent)
@@ -63,8 +60,22 @@ public class GameManager : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        DontDestroyOnLoad(gameObject);
+        if (IsOwnedByServer)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else if (IsServer)
+        {
+            NetworkObject.Despawn(true);
+            return;
+        }
+
+        playerHolyResourceDataNetworkList.OnListChanged += PlayerHolyResourceDataList_OnListChanged;
+
         SceneManager.activeSceneChanged += SceneManager_activeSceneChanged;
+
+        counter = 0;
 
         cameraPositions = new Vector3[]
         {
@@ -72,9 +83,6 @@ public class GameManager : NetworkBehaviour
         };
 
         if (!IsServer) return;
-        playerBuildingsDict = new Dictionary<ulong, Building>();
-
-        counter = 0;
 
         buildingSpawnPos = new Vector3[4]
         {
@@ -99,13 +107,13 @@ public class GameManager : NetworkBehaviour
 
     private void SceneManager_activeSceneChanged(Scene prev, Scene next)
     {
-        if (next.name == Loader.Scene.GameScene.ToString() && IsOwner)
+        if (next.name == Loader.Scene.GameScene.ToString())
         {
             // As new player connects to the scene, spawn base for it
             if (IsServer)
             {
                 AttachNeutralBuildingsOnGameStart();
-                CreateBuildingForConnectedPlayerServerRpc();
+                CreateBuildingForConnectedPlayer(NetworkManager.Singleton.LocalClientId);
                 SpawnResourceSpawner();
             }
             else
@@ -148,7 +156,7 @@ public class GameManager : NetworkBehaviour
             building.NetworkObject.Spawn();
 
             // Set material and building position for units to return back
-            building.SetBasePositionOwnerRpc(neutralBuildingSpawnPos[i], true);
+            building.SetBuildingOwnerRpc(neutralBuildingSpawnPos[i]);
         }
     }
 
@@ -161,7 +169,7 @@ public class GameManager : NetworkBehaviour
     private void CreateBuildingForConnectedPlayer(ulong clientId)
     {
         // Set camera so each players' building is in left bottom corner
-        SetCameraOwnerRpc(counter);
+        SetCameraEveryoneRpc(counter, clientId);
 
         // Create Building for connected player
         GameObject playerBuilding = Instantiate(playerBuildingPrefab, buildingSpawnPos[counter], Quaternion.identity);
@@ -175,7 +183,7 @@ public class GameManager : NetworkBehaviour
         building.NetworkObject.SpawnWithOwnership(clientId);
 
         // Set building position for units to return back
-        building.SetBasePositionOwnerRpc(buildingSpawnPos[counter], false);
+        building.SetBuildingOwnerRpc(buildingSpawnPos[counter]);
 
         counter++;
 
@@ -194,13 +202,14 @@ public class GameManager : NetworkBehaviour
         {
             yield return new WaitForSeconds(1f);
         }
-
         GameReadyEveryoneRpc();
     }
 
-    [Rpc(SendTo.Owner)]
-    private void SetCameraOwnerRpc(int index)
+    [Rpc(SendTo.Everyone)]
+    private void SetCameraEveryoneRpc(int index, ulong clientId)
     {
+        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+
         Camera.main.transform.position = cameraPositions[index];
         Camera.main.transform.Rotate(50, 90 * index, 0);
     }
@@ -251,6 +260,6 @@ public class GameManager : NetworkBehaviour
     [Rpc(SendTo.Everyone)]
     private void GameReadyEveryoneRpc()
     {
-        OnGameReady?.Invoke(this, EventArgs.Empty);
+        OnGameReady?.Invoke();
     }
 }

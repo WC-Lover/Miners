@@ -8,29 +8,29 @@ public class Resource : NetworkBehaviour
     public NetworkVariable<float> weight = new NetworkVariable<float>();
     [SerializeField] private ResourceSO resourceData;
     private int occupiedIndex;
-    public float rangeOfInteraction;
+    public float interactionDistance;
 
     public Action OnResourceDespawn;
     public Action OnResourceInteraction;
 
     public void SetResourceWeight() => weight.Value = resourceData.baseValue;
-    public bool IsHolyResource() => resourceData.type == ResourceType.Holy;
-    public bool IsCommonResource() => resourceData.type == ResourceType.Common;
+    public bool IsHolyResource => resourceData.type == ResourceType.Holy;
+    public bool IsCommonResource => resourceData.type == ResourceType.Common;
 
     public override void OnNetworkSpawn()
     {
         GetComponentInChildren<ResourceUI>().resourceMaxWeight = resourceData.baseValue;
 
         // Change material for the Resource
-        var meshRenderers = GetComponentsInChildren<MeshRenderer>();
-        var meshRendererMaterials = new Material[1];
-        meshRendererMaterials[0] = resourceData.material;
-        for (int i = 0; i < meshRenderers.Length; i++)
-        {
-            meshRenderers[i].materials = meshRendererMaterials;
-        }
+        //var meshRenderers = GetComponentsInChildren<MeshRenderer>();
+        //var meshRendererMaterials = new Material[1];
+        //meshRendererMaterials[0] = resourceData.material;
+        //for (int i = 0; i < meshRenderers.Length; i++)
+        //{
+        //    meshRenderers[i].materials = meshRendererMaterials;
+        //}
 
-        rangeOfInteraction = resourceData.interactionRange;
+        //rangeOfInteraction = resourceData.interactionRange;
     }
 
     public enum ResourceType
