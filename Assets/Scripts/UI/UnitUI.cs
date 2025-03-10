@@ -1,3 +1,4 @@
+using System;
 using Assets.Scripts.Unit;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,14 +22,18 @@ public class UnitUI : MonoBehaviour
         unit = GetComponentInParent<Unit>();
 
         unit.DelegateManager.OnResourceGathered += Unit_OnResourceGathered;
+        unit.DelegateManager.OnDespawn += Unit_OnDespawn;
     }
 
     public void SetUp()
     {
         // Show Stamina/Health only for local player
-        statsSliders.gameObject.SetActive(true);
-        healthSlider.gameObject.SetActive(true);
-        staminaSlider.gameObject.SetActive(true);
+        if (!statsSliders.gameObject.activeSelf)
+        {
+            statsSliders.gameObject.SetActive(true);
+            healthSlider.gameObject.SetActive(true);
+            staminaSlider.gameObject.SetActive(true);
+        }
 
         healthSlider.value = 1;
         staminaSlider.value = 1;
@@ -36,6 +41,18 @@ public class UnitUI : MonoBehaviour
         unit.DelegateManager.OnHealthChanged += Unit_OnHealthChanged;
         unit.DelegateManager.OnStaminaChanged += Unit_OnStaminaChanged;
     }
+
+    private void Unit_OnStaminaChanged(float stamina)
+    {
+        staminaSlider.value = stamina / unit.Config.StaminaMax;
+    }
+
+    private void Unit_OnHealthChanged(float health)
+    {
+        healthSlider.value = health / unit.Config.HealthMax;
+    }
+
+    #region Delegates
 
     private void Unit_OnResourceGathered(bool isHolyResource)
     {
@@ -71,13 +88,17 @@ public class UnitUI : MonoBehaviour
         unit.DelegateManager.OnResourceGathered += Unit_OnResourceGathered;
     }
 
-    private void Unit_OnStaminaChanged(float stamina)
+    private void Unit_OnDespawn()
     {
-        staminaSlider.value = stamina / unit.Config.StaminaMax;
+        unit.DelegateManager.OnResourceUnload = null;
+        unit.DelegateManager.OnResourceGathered = null;
+
+        resourceIndicator.gameObject.SetActive(false);
+        holyResourceIcon.gameObject.SetActive(false);
+        anyResourceIcon.gameObject.SetActive(false);
+
+        unit.DelegateManager.OnResourceGathered += Unit_OnResourceGathered;
     }
 
-    private void Unit_OnHealthChanged(float health)
-    {
-        healthSlider.value = health / unit.Config.HealthMax;
-    }
+    #endregion
 }

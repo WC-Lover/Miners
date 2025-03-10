@@ -228,7 +228,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 571edf0880ef33b4c83068e3e3c3c66f, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -345,10 +345,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
+  resourceData: {fileID: 11400000, guid: affcf3b1ca2dc6741b79ced660f1211d, type: 2}
   weight:
     m_InternalValue: 0
-  resourceData: {fileID: 11400000, guid: affcf3b1ca2dc6741b79ced660f1211d, type: 2}
   interactionDistance: 0
+  meshRenderers:
+  - {fileID: 4958370305761605329}
 --- !u!1 &2936149421259320933
 GameObject:
   m_ObjectHideFlags: 0

@@ -26,25 +26,33 @@ public class ResourceSpawner : MonoBehaviour
     private List<Vector3> resourcePositionListZoneTwo;
     private List<Vector3> resourcePositionListZoneThree;
     private List<Vector3> resourcePositionListZoneFour;
-
+    private List<List<Vector3>> listOfResourcePositionLists;
 
     private void Awake()
     {
         Instance = this;
 
-        resourceSpawnTimeMax = 10;
-        //resourceSpawnTimeMax = 0;
-        resourceSpawnTime = 0;
+        //resourceSpawnTimeMax = 10;
+        ////resourceSpawnTimeMax = 0;
+        //resourceSpawnTime = 0;
 
 
-        // COMMON/RARE RESOURCE ZONE BETWEEN PLAYERS LISTS
+        // RESOURCE ZONE BETWEEN PLAYERS
         resourcePositionListZoneBetween = new List<Vector3>();
 
-        // PLAYERS' COMMON RESOURCE ZONE 1-4 LISTS
+        // PLAYERS' RESOURCE ZONE 1-4
         resourcePositionListZoneOne = new List<Vector3>();
         resourcePositionListZoneTwo = new List<Vector3>();
         resourcePositionListZoneThree = new List<Vector3>();
         resourcePositionListZoneFour = new List<Vector3>();
+
+        listOfResourcePositionLists = new List<List<Vector3>>(5) {
+            resourcePositionListZoneBetween,
+            resourcePositionListZoneOne,
+            resourcePositionListZoneTwo,
+            resourcePositionListZoneThree,
+            resourcePositionListZoneFour
+        };
 
         for (int i = -4; i < 5; i++)
         {
@@ -55,66 +63,45 @@ public class ResourceSpawner : MonoBehaviour
                 if (Math.Abs(i) <= 1 && Math.Abs(j) <= 1) continue;
                 if ((i == -4 || i == 4 || j == -4 || j == 4) && (i == 0 || j == 0)) continue;
 
-                
+
                 Vector3 resourcePosition = new Vector3(i, 0, j);
 
                 if (i == 0 || j == 0)
                 {
                     // ZONE IN BETWEEN PLAYERS
-                    resourcePositionListZoneBetween.Add(resourcePosition);
+                    listOfResourcePositionLists[0].Add(resourcePosition);
                 }
                 else if ((i >= -4 && i <= 0) && (j >= -4 && j <= 0))
                 {
                     // ZONE 1
-                    resourcePositionListZoneOne.Add(resourcePosition);
+                    listOfResourcePositionLists[1].Add(resourcePosition);
                 }
                 else if ((i <= 4 && i >= 0) && (j >= -4 && j <= 0))
                 {
                     // ZONE 2
-                    resourcePositionListZoneTwo.Add(resourcePosition);
+                    listOfResourcePositionLists[2].Add(resourcePosition);
                 }
                 else if ((i <= 4 && i >= 0) && (j <= 4 && j >= 0))
                 {
                     // ZONE 3
-                    resourcePositionListZoneThree.Add(resourcePosition);
+                    listOfResourcePositionLists[3].Add(resourcePosition);
                 }
                 else if ((i >= -4 && i <= 0) && (j <= 4 && j >= 0))
                 {
                     // ZONE 4
-                    resourcePositionListZoneFour.Add(resourcePosition);
+                    listOfResourcePositionLists[4].Add(resourcePosition);
                 }
             }
         }
 
+
         // 5 zones - 1-4 zone and between
-        for (int k = 0; k < 5; k++)
+        for (int i = 0; i < 5; i++)
         {
-            if (k == 0)
-            {
-                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneBetween.Count);
-                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneBetween.Count);
-            }
-            if (k == 1)
-            {
-                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneOne.Count);
-                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneOne.Count);
-            }
-            if (k == 2)
-            {
-                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneTwo.Count);
-                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneTwo.Count);
-            }
-            if (k == 3)
-            {
-                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneThree.Count);
-                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneThree.Count);
-            }
-            if (k == 4)
-            {
-                resourcePool.PredefineUnitPoolByHost(commonResourcePrefab, k, resourcePositionListZoneFour.Count);
-                resourcePool.PredefineUnitPoolByHost(rareResourcePrefab, k, resourcePositionListZoneFour.Count);
-            }
+            resourcePool.PredefineUnitPoolByHost(true, ref commonResourcePrefab, i, listOfResourcePositionLists[i].Count);
+            resourcePool.PredefineUnitPoolByHost(false, ref rareResourcePrefab, i, listOfResourcePositionLists[i].Count);
         }
+
         SpawnHolyResource();
     }
 
@@ -136,46 +123,45 @@ public class ResourceSpawner : MonoBehaviour
     {
         resourceSpawnTime = resourceSpawnTimeMax;
 
-        for (int i = 0; i < 5; i++)
+        allOccupied = true;
+
+        for (int zoneIndex = 0; zoneIndex < 5; zoneIndex++)
         {
-            Resource resource = resourcePool.GetResource(isCommonResource ? commonResourcePrefab : rareResourcePrefab, i);
-            if (resource != null)
-            {
-                if (i == 0) resource.transform.position = resourcePositionListZoneBetween[Random.Range(0, resourcePositionListZoneBetween.Count)];
-                else if (i == 1) resource.transform.position = resourcePositionListZoneOne[Random.Range(0, resourcePositionListZoneOne.Count)];
-                else if (i == 2) resource.transform.position = resourcePositionListZoneTwo[Random.Range(0, resourcePositionListZoneTwo.Count)];
-                else if (i == 3) resource.transform.position = resourcePositionListZoneThree[Random.Range(0, resourcePositionListZoneThree.Count)];
-                else if (i == 4) resource.transform.position = resourcePositionListZoneFour[Random.Range(0, resourcePositionListZoneFour.Count)];
+            if (listOfResourcePositionLists[zoneIndex].Count == 0) continue;
+            if (listOfResourcePositionLists[zoneIndex].Count > 1) allOccupied = false;
 
-                // Enable resource
-                resource.gameObject.SetActive(true);
-                // Spawn resource for other players
-                resource.GetComponent<NetworkObject>().Spawn();
-                resource.GetComponent<Resource>().SetOccupiedZone(i);
-                // Save occupied zone index and index of resource on this zone
-                resource.GetComponent<Resource>().SetResourceWeight();
-            }
+            Debug.Log(isCommonResource);
+
+            Vector3 position = listOfResourcePositionLists[zoneIndex][Random.Range(0, listOfResourcePositionLists[zoneIndex].Count)];
+            Resource resource = resourcePool.GetResource(isCommonResource, zoneIndex);
+
+            resource.transform.position = position;
+            // Remove from list to prevent from spawning 2 resources on same spot
+            listOfResourcePositionLists[zoneIndex].Remove(position);
+
+            // Enable resource
+            resource.gameObject.SetActive(true);
+            // Spawn resource for other players
+            resource.GetComponent<NetworkObject>().Spawn();
+            // Save occupied zone index and index of resource on this zone
+            resource.GetComponent<Resource>().SetOccupiedZone(zoneIndex, position);
         }
-
-        allOccupied = (resourcePositionListZoneBetween.Count == 0 &&
-            resourcePositionListZoneOne.Count == 0 &&
-            resourcePositionListZoneTwo.Count == 0 &&
-            resourcePositionListZoneThree.Count == 0 &&
-            resourcePositionListZoneFour.Count == 0);
     }
 
     private void SpawnHolyResource()
     {
         GameObject holyResource = Instantiate(holyResourcePrefab, Vector3.zero, Quaternion.identity).gameObject;
         holyResource.GetComponent<NetworkObject>().Spawn();
-        holyResource.GetComponent<Resource>().SetResourceWeight();
         holyResource.SetActive(true);
     }
 
-    public void ClearOccupiedZone(Resource resource, int index)
+    public void ClearOccupiedZone(bool isCommonResource, int zoneIndex, Resource resource)
     {
-        if (resource.IsCommonResource) resourcePool.ReturnResource(commonResourcePrefab, resource, index);
-        else resourcePool.ReturnResource(rareResourcePrefab, resource, index);
+        // Refill pool
+        resourcePool.ReturnResource(isCommonResource, zoneIndex, resource);
+        // Restore position
+        listOfResourcePositionLists[zoneIndex].Add(resource.spawnPosition);
+
         allOccupied = false;
     }
 

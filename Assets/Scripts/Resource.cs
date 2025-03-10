@@ -5,32 +5,47 @@ using UnityEngine;
 public class Resource : NetworkBehaviour
 {
 
-    public NetworkVariable<float> weight = new NetworkVariable<float>();
     [SerializeField] private ResourceSO resourceData;
+    public NetworkVariable<float> weight = new NetworkVariable<float>();
     private int occupiedIndex;
     public float interactionDistance;
 
-    public Action OnResourceDespawn;
+    private bool isInteractable;
+
+    public Action OnDespawn;
     public Action OnResourceInteraction;
 
-    public void SetResourceWeight() => weight.Value = resourceData.baseValue;
     public bool IsHolyResource => resourceData.type == ResourceType.Holy;
     public bool IsCommonResource => resourceData.type == ResourceType.Common;
 
+    public Vector3 spawnPosition { get; private set; }
+
+    [SerializeField] MeshRenderer[] meshRenderers;
+    private MaterialPropertyBlock propertyBlock;
+
+    private void Awake()
+    {
+        interactionDistance = resourceData.interactionDistance;
+        GetComponentInChildren<ResourceUI>().resourceMaxWeight = resourceData.resourceWeight;
+        propertyBlock = new MaterialPropertyBlock();
+
+        for (int i = 0; i < meshRenderers.Length; i++)
+        {
+            MeshRenderer renderer = meshRenderers[i];
+
+            renderer.sharedMaterial = resourceData.material;
+
+            renderer.GetPropertyBlock(propertyBlock);
+            renderer.SetPropertyBlock(propertyBlock);
+        }
+    }
+
     public override void OnNetworkSpawn()
     {
-        GetComponentInChildren<ResourceUI>().resourceMaxWeight = resourceData.baseValue;
+        if (!IsServer) return;
 
-        // Change material for the Resource
-        //var meshRenderers = GetComponentsInChildren<MeshRenderer>();
-        //var meshRendererMaterials = new Material[1];
-        //meshRendererMaterials[0] = resourceData.material;
-        //for (int i = 0; i < meshRenderers.Length; i++)
-        //{
-        //    meshRenderers[i].materials = meshRendererMaterials;
-        //}
-
-        //rangeOfInteraction = resourceData.interactionRange;
+        weight.Value = resourceData.resourceWeight;
+        isInteractable = true;
     }
 
     public enum ResourceType
@@ -43,7 +58,7 @@ public class Resource : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void InteractWithResourceServerRpc(float gatherWeight, ServerRpcParams serverRpcParams = default)
     {        
-        if (weight.Value > 0)
+        if (isInteractable && weight.Value > 0)
         {
             OnResourceInteraction?.Invoke();
             float resourceWeightGathered = weight.Value > gatherWeight ? gatherWeight : weight.Value;
@@ -55,32 +70,30 @@ public class Resource : NetworkBehaviour
 
     private void ResourceHasBeenGathered()
     {
-        // If resource is Interaction target for any Unit, notify about its despawn, so they would change target before they completely approached it.
-        NotifyClientsResourceDespawnEverybodyRpc();
+        isInteractable = false;
 
         if (resourceData.type == ResourceType.Holy)
         {
             GameManager.Instance.GameHasFinished();
-        }
-        else
-        {
-            ResourceSpawner.Instance.ClearOccupiedZone(this, occupiedIndex);
         }
         
         NetworkObject.Despawn(false);
         gameObject.SetActive(false);
     }
 
-    [Rpc(SendTo.Everyone)]
-    private void NotifyClientsResourceDespawnEverybodyRpc()
+    public override void OnNetworkDespawn()
     {
+        if (IsServer) ResourceSpawner.Instance.ClearOccupiedZone(IsCommonResource, occupiedIndex, this);
+
+        // If resource is Interaction target for any Unit, notify about its despawn, so they would change target before they completely approached it.
+        OnDespawn?.Invoke();
         // Unsubscribe to avoid Memory Leaks and Ghost Callbacks
-        OnResourceDespawn?.Invoke();
-        OnResourceDespawn = null;
+        OnDespawn = null;
     }
 
-    public void SetOccupiedZone(int occupiedIndex)
+    public void SetOccupiedZone(int occupiedIndex, Vector3 spawnPosition)
     {
         this.occupiedIndex = occupiedIndex;
+        this.spawnPosition = spawnPosition;
     }
 }

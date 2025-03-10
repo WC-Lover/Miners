@@ -1,3 +1,4 @@
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -8,6 +9,7 @@ namespace Assets.Scripts.Unit
     [RequireComponent(typeof(UnitNetwork))]
     [RequireComponent(typeof(UnitSearch))]
     [RequireComponent(typeof(UnitState))]
+    [RequireComponent(typeof(UnitMaterial))]
     public class Unit : NetworkBehaviour
     {
         // References
@@ -17,6 +19,7 @@ namespace Assets.Scripts.Unit
         public UnitSearch Search { get; private set; }
         public UnitState State { get; private set; }
         public UnitDelegateManager DelegateManager { get; private set; }
+        public UnitMaterial UnitMaterial { get; private set; }
 
         // Configuration
         public UnitConfig Config { get; private set; }
@@ -32,13 +35,19 @@ namespace Assets.Scripts.Unit
         private float currentSearchRadius;
         private bool arrivedAtFirstDestination;
 
+        // DEBUG
+        [SerializeField] private float speed;
+        [SerializeField] private float obstacleDetectionDistance;
+        [SerializeField] private float obstacleAvoidanceForce;
+        [SerializeField] private float obstacleDetectionAngle;
+        [SerializeField] private float obstacleDetectionAngleSegmentsAmount;
+
         // Server
         private Building serverOwnerBuilding;
         public void SetOwnerBuildingForServer(Building ownerBuilding) => serverOwnerBuilding = ownerBuilding;
 
         // UI
         [SerializeField] private UnitUI unitUI;
-        [SerializeField] private Material playerMaterial;
 
         private void Awake()
         {
@@ -47,15 +56,17 @@ namespace Assets.Scripts.Unit
             Interaction = GetComponent<UnitInteraction>();
             Search = GetComponent<UnitSearch>();
             State = GetComponent<UnitState>();
+            UnitMaterial = GetComponent<UnitMaterial>();
 
             DelegateManager = new UnitDelegateManager();
         }
 
         public override void OnNetworkSpawn()
         {
+            UnitMaterial.SetUnitMaterial(IsOwner);
+
             if (IsOwner)
             {
-                InitializeMaterials();
                 unitUI.SetUp();
             }
             else
@@ -69,22 +80,15 @@ namespace Assets.Scripts.Unit
 
         public override void OnNetworkDespawn()
         {
+            // If Unit is Interaction target for any other Unit, change target before other Unit completely interacted with/approached this Unit.
+            DelegateManager.OnDespawn?.Invoke();
+
             DelegateManager.DisableAllDelegates();
 
             if (IsServer)
             {
                 serverOwnerBuilding.ResetUnit(this);
             }
-        }
-
-        public void SetUnit(UnitSpawnData unitSpawnData)
-        {
-            InitializeUnitConfig(unitSpawnData);
-                
-            Movement = GetComponent<UnitMovement>();
-            Interaction = GetComponent<UnitInteraction>();
-            Search = GetComponent<UnitSearch>();
-            State = GetComponent<UnitState>();
         }
 
         private void InitializeUnitConfig(UnitSpawnData unitSpawnData)
@@ -94,10 +98,14 @@ namespace Assets.Scripts.Unit
                 // Health
                 HealthMax = unitSpawnData.buildingLevel + 3,
                 // Movement
-                Speed = unitSpawnData.buildingLevel * 0.1f + 0.4f + (unitSpawnData.tempBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0) + (unitSpawnData.permBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0),
-                ObstacleDetectionDistance = 1,
+                //Speed = unitSpawnData.buildingLevel * 0.05f + 0.2f + (unitSpawnData.tempBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0) + (unitSpawnData.permBonus == BonusSelectUI.Bonus.Speed ? 0.1f : 0),
+                Speed = speed,
+                ObstacleDetectionDistance = obstacleDetectionDistance,
+                ObstacleDetectionAngle = obstacleDetectionAngle,
+                ObstacleDetectionAngleSegmentsAmount = obstacleDetectionAngleSegmentsAmount,
+                ObstacleEvasionForce = obstacleAvoidanceForce,
                 // Interaction
-                InteractionCooldownMax = 2 - unitSpawnData.buildingLevel * 0.05f,
+                InteractionCooldown = 2 - unitSpawnData.buildingLevel * 0.05f,
                 InteractionTarget = null,
                 StaminaMax = (unitSpawnData.buildingLevel / 5) + 4 + (unitSpawnData.tempBonus == BonusSelectUI.Bonus.Damage ? 1f : 0) + (unitSpawnData.permBonus == BonusSelectUI.Bonus.Damage ? 1f : 0),
                 // Interaction Distance
@@ -133,21 +141,12 @@ namespace Assets.Scripts.Unit
             DelegateManager.OnUnitSetUp?.Invoke();
         }
 
-        private void InitializeMaterials()
+        // Public API for other components
+        public void SetUnit(UnitSpawnData unitSpawnData)
         {
-            // Rework single material block
-            MeshRenderer[] meshRenderers = GetComponentsInChildren<MeshRenderer>();
-            Material[] meshRendererMaterials = new Material[1];
-
-            meshRendererMaterials[0] = playerMaterial;
-
-            for (int i = 0; i < meshRenderers.Length; i++)
-            {
-                meshRenderers[i].materials = meshRendererMaterials;
-            }
+            InitializeUnitConfig(unitSpawnData);
         }
 
-        // Public API for other components
         public float ModifyStamina(float amount)
         {
             stamina = Mathf.Clamp(stamina + amount, 0, Config.StaminaMax);
@@ -156,6 +155,7 @@ namespace Assets.Scripts.Unit
 
             return stamina;
         }
+
         public float ModifyHealth(float amount)
         {
             health = Mathf.Clamp(health + amount, 0, Config.HealthMax);
@@ -164,34 +164,62 @@ namespace Assets.Scripts.Unit
 
             return health;
         }
+
         public float AddResource(float amount)
         {
-            if (resourceWeight == 0) DelegateManager.OnResourceGathered?.Invoke(false);
+            if (resourceWeight == 0)
+            {
+                Network.AnyResourceGathered();
+                DelegateManager.OnResourceGathered?.Invoke(false);
+            }
 
             resourceWeight = Mathf.Clamp(resourceWeight + amount, 0, Config.ResourceWeightMax);
         
             return resourceWeight;
         }
+
         public float AddHolyResource(float amount)
         {
-            if (holyResourceWeight == 0) DelegateManager.OnResourceGathered?.Invoke(true);
+            if (holyResourceWeight == 0)
+            {
+                Network.HolyResourceGathered();
+                DelegateManager.OnResourceGathered?.Invoke(true);
+            }
 
             resourceWeight = Mathf.Clamp(resourceWeight + amount, 0, Config.ResourceWeightMax);
             holyResourceWeight += amount;
 
             return holyResourceWeight;
         }
+
+        public void UnloadResources()
+        {
+            DelegateManager.OnResourceUnload?.Invoke();
+            holyResourceWeight = 0;
+            resourceWeight = 0;
+            StartCoroutine(ResetStamina());
+        }
+
+        private IEnumerator ResetStamina()
+        {
+            while (stamina < Config.StaminaMax)
+            {
+                ModifyStamina(Time.fixedDeltaTime * Config.StaminaMax);
+                yield return new WaitForFixedUpdate();
+            }
+            DelegateManager.OnUnitSetUp?.Invoke();
+        }
+
         public void ModifyCurrentSearchRadius(float amount) => currentSearchRadius += amount;
         public void ResetCurrentSearchRadius() => currentSearchRadius = Config.DefaultSearchRadius;
         public void ArrivedAtFirstDestination() => arrivedAtFirstDestination = true;
-        //public void ResetUnitInOwnerBuilding() => serverOwnerBuilding.ResetUnit(this);
 
         // Getters
         public bool CanGather => resourceWeight < Config.ResourceWeightMax;
         public bool CanInteract => stamina > 0;
         public bool IsAlive => health > 0;
         public float GetHolyResourceWeight => holyResourceWeight;
-        public float GetResourceWeight => resourceWeight;
+        public float GetResourceWeight => resourceWeight- holyResourceWeight;
         public float GetCurrentSearchRadius => currentSearchRadius;
         public bool HasArrivedAtFirstDestination => arrivedAtFirstDestination;
     }

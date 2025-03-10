@@ -14,6 +14,12 @@ namespace Assets.Scripts.Unit
 
         public InteractionTarget PerformInteraction(InteractionTarget target)
         {
+            if (target.Interaction == InteractionTarget.InteractionType.Unload)
+            {
+                Unload(target.Building);
+                return null;
+            }
+
             if (!CanInteract(target)) return null;
 
             switch (target.Interaction)
@@ -30,9 +36,6 @@ namespace Assets.Scripts.Unit
                 case (InteractionTarget.InteractionType.Gather):
                     Gather(target.Resource);
                     break;
-                case (InteractionTarget.InteractionType.Unload):
-                    Unload(target.Building);
-                    break;
             }
 
             unit.ModifyStamina(-1);
@@ -44,12 +47,11 @@ namespace Assets.Scripts.Unit
         {
             bool canInteract = unit.CanInteract && target != null;
 
-            if (canInteract) canInteract &= Vector3.Distance(transform.position, target.Position) <= target.InteractionDistance;
-            else return canInteract;
-
             if (target.Unit != null) canInteract &= target.Unit.Network.Alive;
             if (target.Resource != null) canInteract &= target.Resource.weight.Value > 0;
 
+            if (canInteract) canInteract &= Vector3.Distance(transform.position, target.Position) <= target.InteractionDistance;
+            
             return canInteract;
         }
         private void Attack(Unit unit)
@@ -74,6 +76,8 @@ namespace Assets.Scripts.Unit
         private void Unload(Building building)
         {
             // When unload trigger action to start coroutine that refills stamina
+            building.BuildingGainXP(unit.GetResourceWeight, unit.GetHolyResourceWeight);
+            unit.UnloadResources();
         }
     }
 }

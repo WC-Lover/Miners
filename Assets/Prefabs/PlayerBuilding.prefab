@@ -12,12 +12,13 @@ GameObject:
   - component: {fileID: 1352482714316836275}
   - component: {fileID: 4418132730002399047}
   - component: {fileID: 2886282067114181542}
+  - component: {fileID: 9014889903038026416}
   m_Layer: 0
   m_Name: PlayerBuilding
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &3993857333681340326
 Transform:
@@ -32,9 +33,9 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 2275032972360177701}
   - {fileID: 7696038111502715465}
   - {fileID: 8461320785741829184}
+  - {fileID: 2275032972360177701}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1352482714316836275
@@ -75,6 +76,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
+  unitSpawnTime: 0
+  unitSpawnTimeMax: 1
   unitPrefab: {fileID: 2748250937568006613, guid: e5e1c00cac5f1c44b8260215a0e56138, type: 3}
   unitPool: {fileID: 2886282067114181542}
   occupationStatus: 0
@@ -84,6 +87,7 @@ MonoBehaviour:
   neutralBuildingMaterial: {fileID: 2100000, guid: 9238df73c2eec1a41859226ff9eb0c79, type: 2}
   bonusSelectionUI: {fileID: 5302394630164297978}
   playerBuildingUI: {fileID: 7715233066687723754}
+  buildingMaterial: {fileID: 9014889903038026416}
 --- !u!114 &2886282067114181542
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -96,7 +100,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 30bf227d00ba50f46a4ce2cb088e2d9c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  unitPoolSize: 20
+  unitPoolSize: 50
+--- !u!114 &9014889903038026416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 488477006654356858}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34045b0bc2224354c9b76a95190786dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerBuildingMaterial: {fileID: 2100000, guid: 0a5662381b373a7489ae50ef293a35c3, type: 2}
+  enemyBuildingMaterial: {fileID: 2100000, guid: d067932a1c0657245a38b75875b60d5e, type: 2}
+  neutralBuildingMaterial: {fileID: 2100000, guid: 9238df73c2eec1a41859226ff9eb0c79, type: 2}
+  meshRenderers:
+  - {fileID: 4431819042866446475}
+  - {fileID: 5245969702134761387}
 --- !u!1 &798614001712303582
 GameObject:
   m_ObjectHideFlags: 0
@@ -203,7 +225,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &8461320785741829184
 Transform:
@@ -251,7 +273,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d067932a1c0657245a38b75875b60d5e, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -375,7 +397,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &7696038111502715465
 Transform:
@@ -423,7 +445,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d067932a1c0657245a38b75875b60d5e, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

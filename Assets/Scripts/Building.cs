@@ -9,20 +9,20 @@ public class Building : NetworkBehaviour
     public static Building Instance;
 
     // PLAYER STATS
-    private float unitSpawnTime;
-    private float unitSpawnTimeMax;
-    private float buildingXP;
-    private float buildingXPMax;
+    [SerializeField] private float unitSpawnTime;
+    [SerializeField] private float unitSpawnTimeMax;
+    private float resourceWeight;
+    private float buildingMaxResourceWeight;
     private int buildingLevel;
     private const int buildingLevelMax = 15;
     private Vector3 baseOfOriginPosition;
-    private const int amoutOfMinersMax = 1;
+    private const int amoutOfMinersMax = 50;
     private int amoutOfMinersSpawned;
 
     private BonusSelectUI.Bonus tempBonus;
     private BonusSelectUI.Bonus permBonus;
 
-    private float holyResourceGathered = 0;
+    private float holyResourceWeight = 0;
 
     private bool unitsAllowedToSpawn = false;
     // SERVER STATS
@@ -35,6 +35,7 @@ public class Building : NetworkBehaviour
     public Occupation occupationStatus;
     public bool isNeutralBuilding;
     private ulong claimedByPlayerWithClientId = 999;
+    // Maybe network variable?
     private float claimingPercentage = 0;
     // UI / MATERIALS
     [SerializeField] private Material playerBuildingMaterial;
@@ -42,7 +43,12 @@ public class Building : NetworkBehaviour
     [SerializeField] private Material neutralBuildingMaterial;
     [SerializeField] private Transform bonusSelectionUI;
     [SerializeField] private Transform playerBuildingUI;
+    private MeshRenderer[] meshRenderers;
 
+    // Material
+    [SerializeField] private BuildingMaterial buildingMaterial;
+
+    // Can be changed to actions
     public EventHandler<OnClaimingPercentageChangedEventArgs> OnClaimingPercentageChanged;
     public class OnClaimingPercentageChangedEventArgs: EventArgs
     {
@@ -67,11 +73,15 @@ public class Building : NetworkBehaviour
         Empty
     }
 
+    public bool IsOccupied => occupationStatus == Occupation.Occupied;
+
     private void Awake()
     {
-        buildingXP = 0;
-        buildingXPMax = 50;
-        unitSpawnTimeMax = 12;
+        meshRenderers = GetComponentsInChildren<MeshRenderer>();
+
+        resourceWeight = 0;
+        buildingMaxResourceWeight = 50;
+        unitSpawnTimeMax = 2;
         unitSpawnTime = 0;
         buildingLevel = 0;
         amoutOfMinersSpawned = 0;
@@ -80,8 +90,13 @@ public class Building : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (IsOwner && !isNeutralBuilding)
+        if (isNeutralBuilding)
         {
+            buildingMaterial.SetNeutralBuildingMaterial();
+        }
+        else if (IsOwner)
+        {
+            buildingMaterial.SetBuildingMaterial();
             Instance = this;
             GameManager.Instance.OnGameReady += GameManager_OnGameReady;
         }
@@ -106,20 +121,6 @@ public class Building : NetworkBehaviour
     public void SetBuildingOwnerRpc(Vector3 baseOfOriginPosition)
     {
         this.baseOfOriginPosition = baseOfOriginPosition;
-        if (!isNeutralBuilding) SetBuildingMaterial();
-    }
-
-    private void SetBuildingMaterial()
-    {
-        var meshRenderers = GetComponentsInChildren<MeshRenderer>();
-        var meshRendererMaterials = new Material[1];
-
-        meshRendererMaterials[0] = playerBuildingMaterial;
-
-        for (int i = 0; i < meshRenderers.Length; i++)
-        {
-            meshRenderers[i].materials = meshRendererMaterials;
-        }
     }
 
     public void PreCreateUnits(Vector3 unitSpawnPoint)
@@ -137,8 +138,10 @@ public class Building : NetworkBehaviour
         if (unitSpawnTime > 0)
         {
             unitSpawnTime -= Time.deltaTime;
-            OnUnitSpawnTimeChanged?.Invoke(this, new OnUnitSpawnTimeChangedEventArgs {
-                unitSpawnTimer = this.unitSpawnTime, unitSpawnTimerMax = this.unitSpawnTimeMax
+            OnUnitSpawnTimeChanged?.Invoke(this, new OnUnitSpawnTimeChangedEventArgs
+            {
+                unitSpawnTimer = this.unitSpawnTime,
+                unitSpawnTimerMax = this.unitSpawnTimeMax
             });
         }
         else if (PlayerMouseInput.Instance.lastWorldPosition != Vector3.zero)
@@ -152,10 +155,10 @@ public class Building : NetworkBehaviour
             SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition, tempBonus, permBonus);
             amoutOfMinersSpawned++;
         }
-        // Add possibility to press right mouse button to spawn with faster interval or all at once?
+        //Add possibility to press right mouse button to spawn with faster interval or all at once?
         //if (Input.GetMouseButtonDown(1))
         //{
-        //    SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition);
+        //    SpawnMinerServerRpc(buildingLevel, baseOfOriginPosition, PlayerMouseInput.Instance.lastWorldPosition, tempBonus, permBonus);
         //}
     }
 
@@ -163,6 +166,9 @@ public class Building : NetworkBehaviour
     private void SpawnMinerServerRpc(int buildingLevel, Vector3 baseOfOriginPosition, Vector3 firstDestinationPosition, BonusSelectUI.Bonus tempBonus, BonusSelectUI.Bonus permBonus, ServerRpcParams serverRpcParams = default)
     {
         Unit unit = unitPool.GetUnit();
+
+        if (unit == null) return;
+
         unit.NetworkObject.SpawnWithOwnership(serverRpcParams.Receive.SenderClientId);
         unit.SetOwnerBuildingForServer(this);
         unit.Network.InitializeUnit(new UnitSpawnData 
@@ -175,25 +181,25 @@ public class Building : NetworkBehaviour
         });
     }
 
-    public void BuildingGainXP(float xp, float holyResource)
+    public void BuildingGainXP(float resourceWeight, float holyResourceWeight)
     {
-        if (holyResource > 0)
+        if (holyResourceWeight > 0)
         {
-            holyResourceGathered += holyResource;
+            this.holyResourceWeight += holyResourceWeight;
         }
         if (buildingLevel >= buildingLevelMax) return;
-        buildingXP += xp + (buildingLevel * 0.5f);
+        this.resourceWeight += resourceWeight + (buildingLevel * 0.01f);
         OnBuildingXPChanged?.Invoke(this, new OnBuildingXPChangedEventArgs
         {
-            buildingXP = this.buildingXP,
-            buildingXPMax = this.buildingXPMax,
+            buildingXP = this.resourceWeight,
+            buildingXPMax = this.buildingMaxResourceWeight,
         });
 
-        if (buildingXP >= buildingXPMax)
+        if (this.resourceWeight >= buildingMaxResourceWeight)
         {
             buildingLevel++;
-            buildingXPMax = buildingXPMax * 1.5f;
-            buildingXP = 0;
+            buildingMaxResourceWeight = buildingMaxResourceWeight * 1.5f;
+            this.resourceWeight = 0;
             unitSpawnTimeMax = unitSpawnTimeMax * 0.92f;
         }
     }

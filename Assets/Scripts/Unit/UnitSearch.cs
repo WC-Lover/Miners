@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace Assets.Scripts.Unit
@@ -68,10 +67,14 @@ namespace Assets.Scripts.Unit
                     if (distance < nearestDistance)
                     {
                         nearestDistance = distance;
-                        target.Unit = unit;
-                        target.Position = unit.transform.position;
-                        target.InteractionDistance = this.unit.Config.UnitInteractionDistance;
-                        target.Interaction = InteractionTarget.InteractionType.Attack;
+                        target = new InteractionTarget
+                        {
+                            Unit = unit,
+                            Position = unit.transform.position,
+                            InteractionDistance = this.unit.Config.UnitInteractionDistance,
+                            Interaction = InteractionTarget.InteractionType.Attack,
+                        };
+                        unit.DelegateManager.OnDespawn += this.unit.DelegateManager.OnInteractionTargetDespawn;
                     }
                 }
             }
@@ -104,20 +107,16 @@ namespace Assets.Scripts.Unit
                     if (!building.isNeutralBuilding && !buildingBelongsToUnitOwner)
                     {
                         // Steal Holy Resource from enemy
-                        // When players steal resource, player from whom resource is being stolen -> gains xp, for comeback chance?
-                        Debug.Log("Steal");
                         target.Interaction = InteractionTarget.InteractionType.Steal;
                     }
                     else if (!buildingBelongsToUnitOwner || !isBuildingOccupied)
                     {
                         // Capture NeutralBuilding
-                        Debug.Log("Capture");
                         target.Interaction = InteractionTarget.InteractionType.Capture;
                     }
                     else
                     {
                         // Ignore Buildings that have similar Owner as Unit
-                        Debug.Log("Skip?");
                         target = null;
                         continue;
                     }
@@ -139,8 +138,6 @@ namespace Assets.Scripts.Unit
             InteractionTarget target = null;
             float nearestDistance = float.MaxValue;
 
-            // theoretically can add here OrderBy(distance) for resourceColliders and return first Resource
-
             for (int i = 0; i < count; i++)
             {
                 Resource resource = resourceColliders[i].GetComponentInParent<Resource>();
@@ -158,6 +155,7 @@ namespace Assets.Scripts.Unit
                             InteractionDistance = resource.interactionDistance,
                             Interaction = InteractionTarget.InteractionType.Gather
                         };
+                        resource.OnDespawn += unit.DelegateManager.OnInteractionTargetDespawn;
                     }
                 }
             }

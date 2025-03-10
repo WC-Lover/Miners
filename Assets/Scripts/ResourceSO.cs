@@ -5,7 +5,7 @@ public class ResourceSO : ScriptableObject
 {
     public Resource.ResourceType type;
     public Material material;
-    public int baseValue;
-    public float interactionRange;
+    public int resourceWeight;
+    public float interactionDistance;
     public AudioClip pickupSound;
 }

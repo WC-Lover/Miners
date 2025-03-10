@@ -10,7 +10,11 @@ namespace Assets.Scripts.Unit
 
         [Header("Movement")]
         public float Speed;
+        [Header("Obstacle evasion")]
         public float ObstacleDetectionDistance;
+        public float ObstacleDetectionAngle;
+        public float ObstacleDetectionAngleSegmentsAmount;
+        public float ObstacleEvasionForce;
         [Space]
 
         [Header("Interaction")]

@@ -171,6 +171,7 @@ GameObject:
   - component: {fileID: 4670417424917588975}
   - component: {fileID: 8088573001577291971}
   - component: {fileID: 8610344694628668786}
+  - component: {fileID: 4273403637005439658}
   m_Layer: 0
   m_Name: Unit
   m_TagString: Untagged
@@ -191,8 +192,8 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 7872880832202780472}
   - {fileID: 6248982810847972742}
+  - {fileID: 7872880832202780472}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3667639325830626811
@@ -280,7 +281,7 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 0
   m_IsKinematic: 1
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_Constraints: 84
   m_CollisionDetection: 3
 --- !u!114 &2748250937568006613
@@ -305,8 +306,12 @@ MonoBehaviour:
   resourceLayerMask:
     serializedVersion: 2
     m_Bits: 128
+  speed: 0.15
+  obstacleDetectionDistance: 0.6
+  obstacleAvoidanceForce: 0.5
+  obstacleDetectionAngle: 60
+  obstacleDetectionAngleSegmentsAmount: 6
   unitUI: {fileID: 3326390582230186111}
-  playerMaterial: {fileID: 2100000, guid: 0a5662381b373a7489ae50ef293a35c3, type: 2}
 --- !u!114 &4646343657597795690
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -348,6 +353,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 993d1d4957a553c44818e3fc53b19e24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 960
+  delay: 0
+  delayMax: 0.5
 --- !u!114 &4670417424917588975
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -385,6 +395,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 276b810c833644c4a89368c1cc6ab163, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &4273403637005439658
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2084840991579971586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6e56c473ac42e044a9f40ff2766a091, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerMaterial: {fileID: 2100000, guid: 0e369a4e2afdd164abe04009909c1818, type: 2}
+  enemyMaterial: {fileID: 2100000, guid: 555fe70c89d44de4383a1113ff695ca5, type: 2}
+  meshRenderers:
+  - {fileID: 7702808897537449606}
 --- !u!1 &2926035120150205954
 GameObject:
   m_ObjectHideFlags: 0
@@ -550,7 +576,7 @@ GameObject:
   - component: {fileID: 4961908804424473873}
   - component: {fileID: 5953299844577963950}
   - component: {fileID: 640098120736928705}
-  - component: {fileID: 3476325108610753851}
+  - component: {fileID: 5833439567337346849}
   m_Layer: 0
   m_Name: Canvas
   m_TagString: Untagged
@@ -641,7 +667,7 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
---- !u!114 &3476325108610753851
+--- !u!114 &5833439567337346849
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -868,7 +894,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d067932a1c0657245a38b75875b60d5e, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

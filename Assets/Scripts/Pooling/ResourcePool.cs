@@ -3,21 +3,24 @@ using UnityEngine;
 
 public class ResourcePool : MonoBehaviour
 {
-    private Dictionary<Resource, List<Queue<Resource>>> poolListDictionary = new Dictionary<Resource, List<Queue<Resource>>>();
+    private Dictionary<bool, List<Queue<Resource>>> poolListDictionary = new Dictionary<bool, List<Queue<Resource>>>();
 
-    public void PredefineUnitPoolByHost(Resource resourcePrefab, int index, int resourcePoolSize)
+    public void PredefineUnitPoolByHost(bool isCommonResource, ref Resource resourcePrefab, int zoneIndex, int resourcePoolSize)
     {
-        if (poolListDictionary.TryGetValue(resourcePrefab, out var poolList))
+        // Add Queue to poolList
+        if (poolListDictionary.TryGetValue(isCommonResource, out var poolList))
         {
             poolList.Add(new Queue<Resource>(resourcePoolSize));
         }
         else
         {
-            poolListDictionary[resourcePrefab] = new List<Queue<Resource>>();
-            poolListDictionary[resourcePrefab].Add(new Queue<Resource>(resourcePoolSize));
+            var resourceQueueList = new List<Queue<Resource>>();
+            resourceQueueList.Add(new Queue<Resource>(resourcePoolSize));
+            poolListDictionary[isCommonResource] = resourceQueueList;
         }
         
-        Queue<Resource> resourceQ =  poolListDictionary[resourcePrefab][index];
+        // Fill Queue with resource
+        Queue<Resource> resourceQ =  poolListDictionary[isCommonResource][zoneIndex];
         for (int i = 0; i < resourcePoolSize; i++)
         {
             Resource resource = Instantiate(resourcePrefab);
@@ -26,23 +29,21 @@ public class ResourcePool : MonoBehaviour
         }
     }
 
-    public Resource GetResource(Resource resourcePrefab, int index)
+    public Resource GetResource(bool isCommonResource, int zoneIndex)
     {
-        Resource retResource = null;
-
-        if (poolListDictionary.TryGetValue(resourcePrefab, out var resources))
+        if (poolListDictionary.TryGetValue(isCommonResource, out var resources))
         {
-            Queue<Resource> resourceQ = resources[index];
-            if (resourceQ.Count > 0) retResource = resourceQ.Dequeue();
+            Queue<Resource> resourceQ = resources[zoneIndex];
+            if (resourceQ.Count > 0) return resourceQ.Dequeue();
         }
 
-        return retResource;
+        return null;
     }
 
-    public void ReturnResource(Resource resourcePrefab, Resource resource, int index)
+    public void ReturnResource(bool isCommonResource, int zoneIndex, Resource resource)
     {
         resource.gameObject.SetActive(false);
         
-        poolListDictionary[resourcePrefab][index].Enqueue(resource);
+        poolListDictionary[isCommonResource][zoneIndex].Enqueue(resource);
     }
 }

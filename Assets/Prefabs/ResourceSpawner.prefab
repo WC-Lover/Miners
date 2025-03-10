@@ -50,7 +50,7 @@ MonoBehaviour:
   holyResourcePrefab: {fileID: 2287146029482801686, guid: f78543141ace1d24a9071656139a2ee3, type: 3}
   resourcePool: {fileID: 4980611385079382318}
   resourceSpawnTime: 0
-  resourceSpawnTimeMax: 0
+  resourceSpawnTimeMax: 2
 --- !u!114 &4980611385079382318
 MonoBehaviour:
   m_ObjectHideFlags: 0

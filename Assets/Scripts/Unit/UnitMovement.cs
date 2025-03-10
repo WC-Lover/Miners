@@ -7,22 +7,36 @@ namespace Assets.Scripts.Unit
     {
         private Unit unit;
         private Rigidbody rb;
+        [SerializeField] private LayerMask obstacleMask;
+        [SerializeField] private float delay;
+        [SerializeField] private float delayMax;
+        private Vector3 lastDirection;
 
         private void Awake()
         {
             unit = GetComponent<Unit>();
             rb = GetComponent<Rigidbody>();
+            delay = delayMax;
         }
 
         public bool MoveTo(InteractionTarget interactionTarget)
         {
-            Vector3 direction = (interactionTarget.Position - transform.position).normalized;
-            Vector3 avoidanceDirection = HandleObstacleAvoidance(interactionTarget);
-            if (avoidanceDirection != Vector3.one) direction = avoidanceDirection;
+            if (delay <= 0)
+            {
+                delay = delayMax;
+                Vector3 direction = (interactionTarget.Position - transform.position).normalized;
+                Vector3 avoidanceDirection = HandleObstacleAvoidance(interactionTarget);
+                //if (avoidanceDirection != Vector3.one) direction = avoidanceDirection;
 
-            RotateTowards(direction);
+                Vector3 adaptedDirection = (direction + avoidanceDirection).normalized;
+                lastDirection = adaptedDirection;
+            }
+            delay -= Time.deltaTime;
 
-            rb.MovePosition(transform.position + direction * (unit.Config.Speed * Time.fixedDeltaTime)); // change direction to forward?
+            RotateTowards(lastDirection);
+
+            //rb.MovePosition(transform.position + direction * (unit.Config.Speed * Time.fixedDeltaTime)); // change direction to forward?
+            rb.MovePosition(transform.position + lastDirection * (unit.Config.Speed * Time.fixedDeltaTime)); // change direction to forward?
 
             return HasArrived(interactionTarget.Position, interactionTarget.InteractionDistance);
         }
@@ -31,69 +45,29 @@ namespace Assets.Scripts.Unit
 
         private Vector3 HandleObstacleAvoidance(InteractionTarget interactionTarget)
         {
-            Vector3 direction = transform.forward;
-            bool obstacleDetected = false;
-            float leftWeight = 0f;
-            float rightWeight = 0f;
+            Vector3 avoidance = Vector3.zero;
 
-            float[] rayAngles = { -30f, -15f, 0f, 15f, 30f }; // Wider detection
-            float[] rayDistances = { 1f, 0.8f, 0.6f, 0.8f, 1f }; // Different distances per angle
-
-            for (int i = 0; i < rayAngles.Length; i++)
+            for (int i = 0; i < unit.Config.ObstacleDetectionAngleSegmentsAmount; i++)
             {
-                float angle = rayAngles[i];
-                float distance = rayDistances[i] * unit.Config.ObstacleDetectionDistance;
-                Vector3 rayDir = Quaternion.Euler(0, angle, 0) * transform.forward;
-                Vector3 rayStart = transform.position + transform.up * 0.1f;
+                // Angle from most right segment to most left
+                float angle = -unit.Config.ObstacleDetectionAngle / 2
+                    + (unit.Config.ObstacleDetectionAngle / (unit.Config.ObstacleDetectionAngleSegmentsAmount - 1)) * i;
+                Vector3 rayDirection = Quaternion.Euler(0, angle, 0) * transform.forward;
 
-                Debug.DrawRay(rayStart, rayDir, Color.red);
-
-                if (Physics.Raycast(rayStart, rayDir, out RaycastHit hit, distance))
+                Debug.DrawRay(transform.position, rayDirection, Color.blue);
+                if (Physics.Raycast(transform.position, rayDirection, out RaycastHit hit, unit.Config.ObstacleDetectionDistance, obstacleMask))
                 {
-                    if (IsCurrentTarget(hit.collider, interactionTarget)) continue;
+                    bool isTarget = IsCurrentTarget(hit.collider, interactionTarget);
 
-                    obstacleDetected = true;
-                    float weight = 1 - (hit.distance / distance);
+                    if (isTarget) continue;
 
-                    // Determine steering direction based on ray angle
-                    if (angle < 0)
-                    {
-                        // Left side obstacle - accumulate right steering
-                        rightWeight += weight;
-                    }
-                    else if (angle > 0)
-                    {
-                        // Right side obstacle - accumulate left steering
-                        leftWeight += weight;
-                    }
-                    else
-                    {
-                        // Center obstacle - check both sides
-                        rightWeight += weight;
-                        leftWeight += weight;
-                    }
+                    float forceMultiplier = 1f - (hit.distance / unit.Config.ObstacleDetectionDistance);
+                    avoidance += hit.normal * (unit.Config.ObstacleEvasionForce * forceMultiplier);
                 }
             }
 
-            if (!obstacleDetected) return Vector3.one;
-
-            // Calculate final avoidance direction
-            if (leftWeight > rightWeight)
-            {
-                // Steer left with intensity based on weight difference
-                direction = Vector3.Lerp(transform.forward, -transform.right,
-                    Mathf.Clamp01(leftWeight - rightWeight)).normalized;
-            }
-            else if (rightWeight >= leftWeight)
-            {
-                // Steer right with intensity based on weight difference
-                direction = Vector3.Lerp(transform.forward, transform.right,
-                    Mathf.Clamp01(rightWeight - leftWeight)).normalized;
-            }
-
-            Debug.DrawRay(transform.position, direction * 2f, Color.magenta);
-
-            return direction;
+            avoidance.y += -avoidance.y;
+            return avoidance.normalized;
         }
 
         private bool IsCurrentTarget(Collider detectedCollider, InteractionTarget interactionTarget)
@@ -109,12 +83,15 @@ namespace Assets.Scripts.Unit
 
         private void RotateTowards(Vector3 direction)
         {
+            if (direction == Vector3.zero) return;
+            
             Quaternion targetRotation = Quaternion.LookRotation(direction);
             rb.MoveRotation(targetRotation);
         }
 
         private bool HasArrived(Vector3 target, float interactionDistance)
         {
+            //Debug.Log($"Distance / interactionDistance -> {Vector3.Distance(transform.position, target)} / {interactionDistance}");
             return Vector3.Distance(transform.position, target) < interactionDistance;
         }
 

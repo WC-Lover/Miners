@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   type: 0
   material: {fileID: 2100000, guid: 571edf0880ef33b4c83068e3e3c3c66f, type: 2}
-  baseValue: 3
-  interactionRange: 0.3
+  resourceWeight: 4
+  interactionDistance: 0.325
   pickupSound: {fileID: 0}

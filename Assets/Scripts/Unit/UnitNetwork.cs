@@ -13,25 +13,7 @@ namespace Assets.Scripts.Unit
         private void Awake()
         {
             unit = GetComponent<Unit>();
-
-            unit.DelegateManager.OnResourceGathered += DelegateManager_OnResourceGathered;
-            unit.DelegateManager.OnResourceUnload += DelegateManager_OnResourceUnload;
         }
-
-        #region Delegates
-
-        private void DelegateManager_OnResourceUnload()
-        {
-            UnloadResource();
-        }
-
-        private void DelegateManager_OnResourceGathered(bool isHolyResource)
-        {
-            if (isHolyResource) HolyResourceGathered();
-            else AnyResourceGathered();
-        }
-
-        #endregion
 
         #region Accesible from outside RPCs
 
@@ -61,7 +43,7 @@ namespace Assets.Scripts.Unit
         }
         public void UnloadResource()
         {
-            UnloadResourceEveryoneRpc();
+            UnloadResourceNotOwnerRpc();
         }
 
         #endregion
@@ -102,6 +84,10 @@ namespace Assets.Scripts.Unit
                             killerClientId,
                             NetworkManager.Singleton.LocalClientId
                             );
+                    }
+                    else
+                    {
+                        DespawnUnit(unit.GetHolyResourceWeight, unit.GetResourceWeight, killerClientId, NetworkManager.Singleton.LocalClientId);
                     }
                 }
             }
@@ -175,11 +161,11 @@ namespace Assets.Scripts.Unit
         }
 
         /// <summary>
-        /// <para>Notifies all clients that resources have been unloaded.</para>
+        /// <para>Notifies all clients(except Owner) that resources have been unloaded.</para>
         /// <para>This RPC ensures that all clients are synchronized regarding resource changes.</para>
         /// </summary>
-        [Rpc(SendTo.Everyone)]
-        private void UnloadResourceEveryoneRpc()
+        [Rpc(SendTo.NotOwner)]
+        private void UnloadResourceNotOwnerRpc()
         {
             // Invoke Action to disable Holy/Any ResourceIndicator UI
             unit.DelegateManager.OnResourceUnload?.Invoke();
